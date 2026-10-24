@@ -1,0 +1,19 @@
+# Python virtual environment
+env/
+venv/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Environment variables and secrets
+.env
+
+# Node.js dependencies
+node_modules/
+
+# Uploaded media
+media/
+
+# Build output
+dist/
