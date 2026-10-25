@@ -107,7 +107,6 @@ class LoginView(APIView):
         )
 
 
-
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
