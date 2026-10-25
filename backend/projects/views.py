@@ -2,11 +2,11 @@ from django.shortcuts import render
 
 # Create your views here.
 
-from rest_framework import generics, serializers
-from rest_framework.permissions import IsAuthenticated
+
+from rest_framework import serializers
 
 from .models import Project
-from tenancy.permissions import IsWorkspaceMember
+from tenancy.mixins import TenantScopedViewSet
 
 
 class ProjectSerializer(serializers.ModelSerializer):
@@ -22,14 +22,14 @@ class ProjectSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
-class ProjectListCreateView(generics.ListCreateAPIView):
+
+class ProjectListCreateView(TenantScopedViewSet):
+    queryset = Project.objects.all()
     serializer_class = ProjectSerializer
-    permission_classes = [IsAuthenticated, IsWorkspaceMember]
 
     def get_queryset(self):
-        return Project.objects.filter(
-            workspace=self.request.workspace
-        ).order_by("-created_at")
+        return super().get_queryset().order_by("-created_at")
+
 
     def perform_create(self, serializer):
         serializer.save(workspace=self.request.workspace)
