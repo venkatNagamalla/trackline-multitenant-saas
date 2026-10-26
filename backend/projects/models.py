@@ -1,6 +1,5 @@
-from django.db import models
 
-# Create your models here.
+from django.db import models
 
 
 class Project(models.Model):
@@ -10,9 +9,128 @@ class Project(models.Model):
         related_name="projects",
     )
     name = models.CharField(max_length=150)
+    key = models.CharField(max_length=10, blank=True)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        ordering = ["name", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["workspace", "key"],
+                name="unique_project_key_per_workspace",
+            ),
+        ]
+
     def __str__(self):
         return self.name
+
+
+class Board(models.Model):
+    workspace = models.ForeignKey(
+        "tenancy.Workspace",
+        on_delete=models.CASCADE,
+        related_name="boards",
+    )
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="boards",
+    )
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        ordering = ["name", "id"]
+
+    def __str__(self):
+        return self.name
+
+
+class WorkflowStatus(models.Model):
+    workspace = models.ForeignKey(
+        "tenancy.Workspace",
+        on_delete=models.CASCADE,
+        related_name="workflow_statuses",
+    )
+    board = models.ForeignKey(
+        Board,
+        on_delete=models.CASCADE,
+        related_name="statuses",
+    )
+    name = models.CharField(max_length=50)
+    order = models.PositiveIntegerField(default=0)
+    is_done = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return self.name
+
+
+class Issue(models.Model):
+    PRIORITY_CHOICES = [
+        ("low", "Low"),
+        ("medium", "Medium"),
+        ("high", "High"),
+        ("urgent", "Urgent"),
+    ]
+
+    workspace = models.ForeignKey(
+        "tenancy.Workspace",
+        on_delete=models.CASCADE,
+        related_name="issues",
+    )
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="issues",
+    )
+    board = models.ForeignKey(
+        Board,
+        on_delete=models.CASCADE,
+        related_name="issues",
+    )
+    status = models.ForeignKey(
+        WorkflowStatus,
+        on_delete=models.PROTECT,
+        related_name="issues",
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    priority = models.CharField(
+        max_length=10,
+        choices=PRIORITY_CHOICES,
+        default="medium",
+    )
+    assignee = models.ForeignKey(
+        "tenancy.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_issues",
+    )
+    reporter = models.ForeignKey(
+        "tenancy.User",
+        on_delete=models.PROTECT,
+        related_name="reported_issues",
+    )
+    rank = models.FloatField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["rank", "id"]
+        indexes = [
+            models.Index(
+                fields=["workspace", "project"],
+                name="issue_ws_project_idx",
+            ),
+            models.Index(
+                fields=["workspace", "status"],
+                name="issue_ws_status_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return self.title
