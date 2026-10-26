@@ -57,6 +57,9 @@ issue_detail = IssueViewSet.as_view({
     "delete": "destroy",
 })
 
+issue_move = IssueViewSet.as_view({
+    "post": "move",
+})
 
 urlpatterns = [
     path("", project_list_create, name="project-list-create"),
@@ -70,4 +73,10 @@ urlpatterns = [
 
     path("issues/", issue_list_create, name="issue-list-create"),
     path("issues/<int:pk>/", issue_detail, name="issue-detail"),
+
+    path(
+    "issues/<int:pk>/move/",
+    issue_move,
+    name="issue-move",
+),
 ]

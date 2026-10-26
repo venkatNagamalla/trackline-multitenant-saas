@@ -1,12 +1,17 @@
 
 from django.db import transaction
+
 from tenancy.models import User
-from rest_framework import serializers
+from tenancy.mixins import TenantPKField, TenantScopedViewSet
+
+from rest_framework import serializers, status as http_status
+from rest_framework.decorators import action
 from rest_framework.filters import SearchFilter
+from rest_framework.response import Response
+
 from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import Project, Board, WorkflowStatus, Issue
-from tenancy.mixins import TenantPKField, TenantScopedViewSet
 
 
 # -------------------------
@@ -177,11 +182,13 @@ class IssueSerializer(serializers.ModelSerializer):
     project = TenantPKField(queryset=Project.objects.all())
     board = TenantPKField(queryset=Board.objects.all())
     status = TenantPKField(queryset=WorkflowStatus.objects.all())
+
     assignee = serializers.PrimaryKeyRelatedField(
-    queryset=User.objects.all(),
-    required=False,
-    allow_null=True,
-)
+        queryset=User.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
     reporter = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
@@ -253,6 +260,15 @@ class IssueSerializer(serializers.ModelSerializer):
 
 
 # -------------------------
+# Issue Move Serializer
+# -------------------------
+
+class IssueMoveSerializer(serializers.Serializer):
+    status = TenantPKField(queryset=WorkflowStatus.objects.all())
+    rank = serializers.FloatField()
+
+
+# -------------------------
 # Issue ViewSet
 # -------------------------
 
@@ -275,4 +291,41 @@ class IssueViewSet(TenantScopedViewSet):
         serializer.save(
             workspace=self.request.workspace,
             reporter=self.request.user,
+        )
+
+    @action(detail=True, methods=["post"], url_path="move")
+    def move(self, request, pk=None):
+        issue = self.get_object()
+
+        serializer = IssueMoveSerializer(
+            data=request.data,
+            context=self.get_serializer_context(),
+        )
+        serializer.is_valid(raise_exception=True)
+
+        new_status = serializer.validated_data["status"]
+        new_rank = serializer.validated_data["rank"]
+
+        if new_status.board_id != issue.board_id:
+            return Response(
+                {
+                    "status": (
+                        "The destination status must belong "
+                        "to the issue's board."
+                    )
+                },
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        issue.status = new_status
+        issue.rank = new_rank
+        issue.save(update_fields=["status", "rank"])
+
+        return Response(
+            {
+                "id": issue.id,
+                "status": issue.status_id,
+                "rank": issue.rank,
+            },
+            status=http_status.HTTP_200_OK,
         )

@@ -1,7 +1,9 @@
+
 import { Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
+import Board from "./pages/Board";
 import ProtectedRoute from "./auth/ProtectedRoute";
 
 function App() {
@@ -12,6 +14,7 @@ function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/projects/:projectId" element={<Board />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />
