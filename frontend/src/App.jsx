@@ -1,11 +1,21 @@
+import { Routes, Route, Navigate } from "react-router-dom";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
+import Dashboard from "./pages/Dashboard";
+import ProtectedRoute from "./auth/ProtectedRoute";
 
-import React from 'react';
-
-const App = () => {
+function App() {
   return (
-    <div>
-        <h1>Hello world!</h1>
-    </div>
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
+
+      <Route element={<ProtectedRoute />}>
+        <Route path="/dashboard" element={<Dashboard />} />
+      </Route>
+
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
   );
 }
 
