@@ -5,6 +5,7 @@ from .views import (
     ProjectListCreateView,
     BoardViewSet,
     WorkflowStatusViewSet,
+    WorkflowTransitionViewSet,
     IssueViewSet,
     SprintViewSet,
     CommentViewSet,
@@ -90,6 +91,18 @@ comment_detail = CommentViewSet.as_view({
     "delete": "destroy",
 })
 
+transition_list_create = WorkflowTransitionViewSet.as_view({
+    "get": "list",
+    "post": "create",
+})
+
+transition_detail = WorkflowTransitionViewSet.as_view({
+    "get": "retrieve",
+    "put": "update",
+    "patch": "partial_update",
+    "delete": "destroy",
+})
+
 urlpatterns = [
     path("", project_list_create, name="project-list-create"),
     path("<int:pk>/", project_detail, name="project-detail"),
@@ -122,5 +135,15 @@ path(
     "comments/<int:pk>/",
     comment_detail,
     name="comment-detail",
+),
+path(
+    "transitions/",
+    transition_list_create,
+    name="transition-list-create",
+),
+path(
+    "transitions/<int:pk>/",
+    transition_detail,
+    name="transition-detail",
 ),
 ]

@@ -103,6 +103,35 @@ class WorkflowStatus(models.Model):
         return self.name
 
 
+class WorkflowTransition(models.Model):
+    board = models.ForeignKey(
+        Board,
+        on_delete=models.CASCADE,
+        related_name="workflow_transitions",
+    )
+    from_status = models.ForeignKey(
+        WorkflowStatus,
+        on_delete=models.CASCADE,
+        related_name="outgoing_transitions",
+    )
+    to_status = models.ForeignKey(
+        WorkflowStatus,
+        on_delete=models.CASCADE,
+        related_name="incoming_transitions",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["board", "from_status", "to_status"],
+                name="unique_workflow_transition",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.from_status.name} -> {self.to_status.name}"
+
+
 class Issue(models.Model):
     PRIORITY_CHOICES = [
         ("low", "Low"),
@@ -121,7 +150,6 @@ class Issue(models.Model):
         on_delete=models.CASCADE,
         related_name="issues",
     )
-    
     sprint = models.ForeignKey(
         Sprint,
         on_delete=models.SET_NULL,
@@ -129,7 +157,6 @@ class Issue(models.Model):
         blank=True,
         related_name="issues",
     )
-
     board = models.ForeignKey(
         Board,
         on_delete=models.CASCADE,
@@ -177,6 +204,7 @@ class Issue(models.Model):
 
     def __str__(self):
         return self.title
+
 
 class Comment(models.Model):
     workspace = models.ForeignKey(

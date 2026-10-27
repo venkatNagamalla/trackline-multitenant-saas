@@ -1,24 +1,33 @@
+from rest_framework import viewsets
 from django.db import transaction
 from django.db.models import Count
-
-from audit.models import AuditLog
-
-from tenancy.models import User
-from tenancy.mixins import TenantPKField, TenantScopedViewSet
+from django.db.models.deletion import ProtectedError
 
 from rest_framework import serializers, status as http_status
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.filters import SearchFilter
-from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-
-from .permissions import IsCommentAuthorOrWorkspaceAdmin
-
-from tenancy.permissions import IsWorkspaceMember, RolePermission
+from rest_framework.response import Response
 
 from django_filters.rest_framework import DjangoFilterBackend
 
-from .models import Project, Board, WorkflowStatus, Issue, Sprint, Comment
+from audit.models import AuditLog
+from tenancy.models import User
+from tenancy.mixins import TenantPKField, TenantScopedViewSet
+from tenancy.permissions import IsWorkspaceMember, RolePermission
+
+from .models import (
+    Project,
+    Board,
+    WorkflowStatus,
+    WorkflowTransition,
+    Issue,
+    Sprint,
+    Comment,
+)
+from .permissions import IsCommentAuthorOrWorkspaceAdmin
+
 
 # -------------------------
 # Project Serializer
@@ -46,6 +55,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             )
 
         workspace = self.context["request"].workspace
+
         existing = Project.objects.filter(
             workspace=workspace,
             key=value,
@@ -71,43 +81,36 @@ class ProjectListCreateView(TenantScopedViewSet):
     serializer_class = ProjectSerializer
 
     def get_permissions(self):
-        permission_classes = [
-            IsAuthenticated,
-            IsWorkspaceMember,
-            RolePermission,
+        return [
+            IsAuthenticated(),
+            IsWorkspaceMember(),
+            RolePermission(),
         ]
-
-        return [permission() for permission in permission_classes]
 
     def get_queryset(self):
         return super().get_queryset().order_by("-created_at", "-id")
 
     def perform_destroy(self, instance):
         if self.request.membership.role != "admin":
-            from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied(
                 "Only workspace admins can delete projects."
             )
 
-        # Write the audit log before deleting the project.
         super().perform_destroy(instance)
 
     @transaction.atomic
     def perform_create(self, serializer):
         workspace = self.request.workspace
 
-        # Save the project and create its audit record.
         super().perform_create(serializer)
         project = serializer.instance
 
-        # Create the default board.
         board = Board.objects.create(
             workspace=workspace,
             project=project,
             name="Main Board",
         )
 
-        # Create the default workflow statuses.
         WorkflowStatus.objects.bulk_create([
             WorkflowStatus(
                 workspace=workspace,
@@ -131,6 +134,7 @@ class ProjectListCreateView(TenantScopedViewSet):
                 is_done=True,
             ),
         ])
+
 
 # -------------------------
 # Board Serializer
@@ -192,14 +196,182 @@ class WorkflowStatusSerializer(serializers.ModelSerializer):
 # -------------------------
 
 class WorkflowStatusViewSet(TenantScopedViewSet):
-    queryset = WorkflowStatus.objects.all()
+    queryset = WorkflowStatus.objects.select_related(
+        "board",
+        "workspace",
+    )
     serializer_class = WorkflowStatusSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ["board"]
     search_fields = ["name"]
 
+    def get_permissions(self):
+        return [
+            IsAuthenticated(),
+            IsWorkspaceMember(),
+            RolePermission(),
+        ]
+
+    def get_queryset(self):
+        return super().get_queryset().filter(
+            workspace=self.request.workspace,
+            board__workspace=self.request.workspace,
+        )
+
+    def _require_admin(self):
+        if self.request.membership.role != "admin":
+            raise PermissionDenied(
+                "Only workspace admins can manage workflow statuses."
+            )
+
     def perform_create(self, serializer):
+        self._require_admin()
         serializer.save(workspace=self.request.workspace)
+
+    def perform_update(self, serializer):
+        self._require_admin()
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._require_admin()
+
+        try:
+            with transaction.atomic():
+                instance.delete()
+        except ProtectedError:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError({
+                "detail": (
+                    "Cannot delete this workflow status because it still "
+                    "has issues assigned to it. Move those issues to "
+                    "another status first."
+                )
+            })
+
+
+# -------------------------
+# Workflow Transition Serializer
+# -------------------------
+
+class WorkflowTransitionSerializer(serializers.ModelSerializer):
+    board = TenantPKField(queryset=Board.objects.all())
+    from_status = TenantPKField(queryset=WorkflowStatus.objects.all())
+    to_status = TenantPKField(queryset=WorkflowStatus.objects.all())
+
+    class Meta:
+        model = WorkflowTransition
+        fields = ["id", "board", "from_status", "to_status"]
+        read_only_fields = ["id"]
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        instance = self.instance
+
+        board = attrs.get(
+            "board",
+            instance.board if instance else None,
+        )
+        from_status = attrs.get(
+            "from_status",
+            instance.from_status if instance else None,
+        )
+        to_status = attrs.get(
+            "to_status",
+            instance.to_status if instance else None,
+        )
+
+        if board is None or from_status is None or to_status is None:
+            raise serializers.ValidationError(
+                "Board, source status, and destination status are required."
+            )
+
+        if board.workspace_id != request.workspace.id:
+            raise serializers.ValidationError({
+                "board": "Board must belong to the active workspace."
+            })
+
+        if from_status.workspace_id != request.workspace.id:
+            raise serializers.ValidationError({
+                "from_status": (
+                    "Source status must belong to the active workspace."
+                )
+            })
+
+        if to_status.workspace_id != request.workspace.id:
+            raise serializers.ValidationError({
+                "to_status": (
+                    "Destination status must belong to the active workspace."
+                )
+            })
+
+        if from_status.board_id != board.id:
+            raise serializers.ValidationError({
+                "from_status": (
+                    "Source status must belong to the selected board."
+                )
+            })
+
+        if to_status.board_id != board.id:
+            raise serializers.ValidationError({
+                "to_status": (
+                    "Destination status must belong to the selected board."
+                )
+            })
+
+        if from_status.id == to_status.id:
+            raise serializers.ValidationError({
+                "to_status": "A status cannot transition to itself."
+            })
+
+        return attrs
+
+
+# -------------------------
+# Workflow Transition ViewSet
+# -------------------------
+
+class WorkflowTransitionViewSet(viewsets.ModelViewSet):
+    queryset = WorkflowTransition.objects.select_related(
+        "board",
+        "from_status",
+        "to_status",
+    )
+    serializer_class = WorkflowTransitionSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["board"]
+
+    def get_permissions(self):
+        return [
+            IsAuthenticated(),
+            IsWorkspaceMember(),
+            RolePermission(),
+        ]
+
+    def get_queryset(self):
+        return super().get_queryset().filter(
+            board__workspace=self.request.workspace,
+            from_status__workspace=self.request.workspace,
+            to_status__workspace=self.request.workspace,
+        )
+
+    def _require_admin(self):
+        if self.request.membership.role != "admin":
+            raise PermissionDenied(
+                "Only workspace admins can manage workflow transitions."
+            )
+
+    def perform_create(self, serializer):
+        self._require_admin()
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self._require_admin()
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._require_admin()
+        super().perform_destroy(instance)
 
 
 # -------------------------
@@ -242,21 +414,23 @@ class IssueSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "reporter", "created_at"]
 
     def validate(self, attrs):
+        instance = self.instance
+
         project = attrs.get(
             "project",
-            self.instance.project if self.instance else None,
+            instance.project if instance else None,
         )
         board = attrs.get(
             "board",
-            self.instance.board if self.instance else None,
+            instance.board if instance else None,
         )
-        status = attrs.get(
+        status_obj = attrs.get(
             "status",
-            self.instance.status if self.instance else None,
+            instance.status if instance else None,
         )
         sprint = attrs.get(
             "sprint",
-            self.instance.sprint if self.instance else None,
+            instance.sprint if instance else None,
         )
         workspace = self.context["request"].workspace
 
@@ -270,7 +444,7 @@ class IssueSerializer(serializers.ModelSerializer):
                 "board": "Board must belong to the active workspace."
             })
 
-        if status and status.workspace_id != workspace.id:
+        if status_obj and status_obj.workspace_id != workspace.id:
             raise serializers.ValidationError({
                 "status": "Status must belong to the active workspace."
             })
@@ -280,7 +454,7 @@ class IssueSerializer(serializers.ModelSerializer):
                 "board": "Board must belong to the selected project."
             })
 
-        if board and status and status.board_id != board.id:
+        if board and status_obj and status_obj.board_id != board.id:
             raise serializers.ValidationError({
                 "status": "Status must belong to the selected board."
             })
@@ -297,7 +471,7 @@ class IssueSerializer(serializers.ModelSerializer):
 
         assignee = attrs.get(
             "assignee",
-            self.instance.assignee if self.instance else None,
+            instance.assignee if instance else None,
         )
         if assignee and not assignee.memberships.filter(
             workspace=workspace
@@ -339,17 +513,19 @@ class SprintSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "state", "created_at"]
 
     def validate(self, attrs):
+        instance = self.instance
+
         project = attrs.get(
             "project",
-            self.instance.project if self.instance else None,
+            instance.project if instance else None,
         )
         start = attrs.get(
             "start",
-            self.instance.start if self.instance else None,
+            instance.start if instance else None,
         )
         end = attrs.get(
             "end",
-            self.instance.end if self.instance else None,
+            instance.end if instance else None,
         )
         workspace = self.context["request"].workspace
 
@@ -364,6 +540,11 @@ class SprintSerializer(serializers.ModelSerializer):
             })
 
         return attrs
+
+
+# -------------------------
+# Comment Serializer
+# -------------------------
 
 class CommentSerializer(serializers.ModelSerializer):
     author = serializers.ReadOnlyField(source="author.id")
@@ -384,6 +565,7 @@ class CommentSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
 
 # -------------------------
 # Sprint ViewSet
@@ -411,7 +593,6 @@ class SprintViewSet(TenantScopedViewSet):
     def start(self, request, pk=None):
         sprint = self.get_object()
 
-        # Lock the project's existing sprint rows while checking state.
         list(
             Sprint.objects.select_for_update()
             .filter(project=sprint.project)
@@ -466,11 +647,14 @@ class SprintViewSet(TenantScopedViewSet):
         sprint.state = "closed"
         sprint.save(update_fields=["state"])
 
-        return Response({
-            "detail": "Sprint completed successfully.",
-            "sprint_id": sprint.id,
-            "returned_to_backlog": returned_to_backlog,
-        }, status=http_status.HTTP_200_OK)
+        return Response(
+            {
+                "detail": "Sprint completed successfully.",
+                "sprint_id": sprint.id,
+                "returned_to_backlog": returned_to_backlog,
+            },
+            status=http_status.HTTP_200_OK,
+        )
 
     @action(detail=True, methods=["get"], url_path="report")
     def report(self, request, pk=None):
@@ -482,20 +666,25 @@ class SprintViewSet(TenantScopedViewSet):
 
         status_counts = {
             item["status__name"]: item["count"]
-            for item in issues.values("status__name").annotate(
-                count=Count("id")
-            ).order_by("status__name")
+            for item in issues.values("status__name")
+            .annotate(count=Count("id"))
+            .order_by("status__name")
         }
 
-        return Response({
-            "sprint_id": sprint.id,
-            "sprint_name": sprint.name,
-            "state": sprint.state,
-            "total_issues": total,
-            "done_issues": done,
-            "completion_percentage": round(done * 100 / total, 2) if total else 0,
-            "issues_by_status": status_counts,
-        }, status=http_status.HTTP_200_OK)
+        return Response(
+            {
+                "sprint_id": sprint.id,
+                "sprint_name": sprint.name,
+                "state": sprint.state,
+                "total_issues": total,
+                "done_issues": done,
+                "completion_percentage": (
+                    round(done * 100 / total, 2) if total else 0
+                ),
+                "issues_by_status": status_counts,
+            },
+            status=http_status.HTTP_200_OK,
+        )
 
 
 # -------------------------
@@ -514,13 +703,13 @@ class IssueViewSet(TenantScopedViewSet):
     serializer_class = IssueSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = {
-    "project": ["exact"],
-    "board": ["exact"],
-    "status": ["exact"],
-    "priority": ["exact"],
-    "assignee": ["exact"],
-    "sprint": ["exact", "isnull"],
-}
+        "project": ["exact"],
+        "board": ["exact"],
+        "status": ["exact"],
+        "priority": ["exact"],
+        "assignee": ["exact"],
+        "sprint": ["exact", "isnull"],
+    }
     search_fields = ["title", "description"]
 
     def perform_create(self, serializer):
@@ -543,10 +732,16 @@ class IssueViewSet(TenantScopedViewSet):
         new_status = serializer.validated_data["status"]
         new_rank = serializer.validated_data["rank"]
 
+        if new_status.workspace_id != request.workspace.id:
+            return Response(
+                {"detail": "Destination status must belong to this workspace."},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
         if new_status.board_id != issue.board_id:
             return Response(
                 {
-                    "status": (
+                    "detail": (
                         "The destination status must belong "
                         "to the issue's board."
                     )
@@ -554,16 +749,35 @@ class IssueViewSet(TenantScopedViewSet):
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
 
-        # Capture the previous values before updating the issue.
+        # Enforce configured outgoing transitions.
+        allowed_transitions = WorkflowTransition.objects.filter(
+            board_id=issue.board_id,
+            from_status_id=issue.status_id,
+        )
+
+        if allowed_transitions.exists():
+            transition_allowed = allowed_transitions.filter(
+                to_status_id=new_status.id,
+            ).exists()
+
+            if not transition_allowed:
+                return Response(
+                    {
+                        "detail": (
+                            f"Transition from '{issue.status.name}' "
+                            f"to '{new_status.name}' is not allowed."
+                        )
+                    },
+                    status=http_status.HTTP_400_BAD_REQUEST,
+                )
+
         old_status = issue.status
         old_rank = issue.rank
 
-        # Update the issue's status and rank.
         issue.status = new_status
         issue.rank = new_rank
         issue.save(update_fields=["status", "rank"])
 
-        # Record the move in the audit log.
         AuditLog.objects.create(
             workspace=request.workspace,
             actor=request.user,
@@ -593,6 +807,11 @@ class IssueViewSet(TenantScopedViewSet):
             status=http_status.HTTP_200_OK,
         )
 
+
+# -------------------------
+# Comment ViewSet
+# -------------------------
+
 class CommentViewSet(TenantScopedViewSet):
     serializer_class = CommentSerializer
 
@@ -611,21 +830,17 @@ class CommentViewSet(TenantScopedViewSet):
         )
 
     def get_permissions(self):
-        print("COMMENT ACTION:", self.action)
-
         if self.action in ["update", "partial_update", "destroy"]:
-            permission_classes = [
-                IsAuthenticated,
-                IsWorkspaceMember,
-                IsCommentAuthorOrWorkspaceAdmin,
-            ]
-        else:
-            permission_classes = [
-                IsAuthenticated,
-                IsWorkspaceMember,
+            return [
+                IsAuthenticated(),
+                IsWorkspaceMember(),
+                IsCommentAuthorOrWorkspaceAdmin(),
             ]
 
-        return [permission() for permission in permission_classes]
+        return [
+            IsAuthenticated(),
+            IsWorkspaceMember(),
+        ]
 
     def perform_create(self, serializer):
         serializer.save(
