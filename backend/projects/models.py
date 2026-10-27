@@ -27,6 +27,40 @@ class Project(models.Model):
         return self.name
 
 
+class Sprint(models.Model):
+    STATE_CHOICES = [
+        ("planned", "Planned"),
+        ("active", "Active"),
+        ("closed", "Closed"),
+    ]
+
+    workspace = models.ForeignKey(
+        "tenancy.Workspace",
+        on_delete=models.CASCADE,
+        related_name="sprints",
+    )
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="sprints",
+    )
+    name = models.CharField(max_length=150)
+    start = models.DateField()
+    end = models.DateField()
+    state = models.CharField(
+        max_length=10,
+        choices=STATE_CHOICES,
+        default="planned",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-start", "id"]
+
+    def __str__(self):
+        return f"{self.project.name} - {self.name}"
+
+
 class Board(models.Model):
     workspace = models.ForeignKey(
         "tenancy.Workspace",
@@ -87,6 +121,15 @@ class Issue(models.Model):
         on_delete=models.CASCADE,
         related_name="issues",
     )
+    
+    sprint = models.ForeignKey(
+        Sprint,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="issues",
+    )
+
     board = models.ForeignKey(
         Board,
         on_delete=models.CASCADE,
@@ -134,3 +177,26 @@ class Issue(models.Model):
 
     def __str__(self):
         return self.title
+
+class Comment(models.Model):
+    workspace = models.ForeignKey(
+        "tenancy.Workspace",
+        on_delete=models.CASCADE,
+        related_name="comments",
+    )
+    issue = models.ForeignKey(
+        Issue,
+        on_delete=models.CASCADE,
+        related_name="comments",
+    )
+    author = models.ForeignKey(
+        "tenancy.User",
+        on_delete=models.CASCADE,
+        related_name="issue_comments",
+    )
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Comment by {self.author} on Issue {self.issue_id}"
