@@ -1,6 +1,8 @@
 from django.db import transaction
 from django.db.models import Count
 
+from audit.models import AuditLog
+
 from tenancy.models import User
 from tenancy.mixins import TenantPKField, TenantScopedViewSet
 
@@ -64,7 +66,6 @@ class ProjectSerializer(serializers.ModelSerializer):
 # Project ViewSet
 # -------------------------
 
-
 class ProjectListCreateView(TenantScopedViewSet):
     queryset = Project.objects.all()
     serializer_class = ProjectSerializer
@@ -88,19 +89,25 @@ class ProjectListCreateView(TenantScopedViewSet):
                 "Only workspace admins can delete projects."
             )
 
-        instance.delete()
+        # Write the audit log before deleting the project.
+        super().perform_destroy(instance)
 
     @transaction.atomic
     def perform_create(self, serializer):
         workspace = self.request.workspace
-        project = serializer.save(workspace=workspace)
 
+        # Save the project and create its audit record.
+        super().perform_create(serializer)
+        project = serializer.instance
+
+        # Create the default board.
         board = Board.objects.create(
             workspace=workspace,
             project=project,
             name="Main Board",
         )
 
+        # Create the default workflow statuses.
         WorkflowStatus.objects.bulk_create([
             WorkflowStatus(
                 workspace=workspace,
@@ -124,7 +131,6 @@ class ProjectListCreateView(TenantScopedViewSet):
                 is_done=True,
             ),
         ])
-
 
 # -------------------------
 # Board Serializer
@@ -524,6 +530,7 @@ class IssueViewSet(TenantScopedViewSet):
         )
 
     @action(detail=True, methods=["post"], url_path="move")
+    @transaction.atomic
     def move(self, request, pk=None):
         issue = self.get_object()
 
@@ -547,9 +554,35 @@ class IssueViewSet(TenantScopedViewSet):
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
 
+        # Capture the previous values before updating the issue.
+        old_status = issue.status
+        old_rank = issue.rank
+
+        # Update the issue's status and rank.
         issue.status = new_status
         issue.rank = new_rank
         issue.save(update_fields=["status", "rank"])
+
+        # Record the move in the audit log.
+        AuditLog.objects.create(
+            workspace=request.workspace,
+            actor=request.user,
+            action="move",
+            object_type=issue._meta.label,
+            object_id=str(issue.pk),
+            changes={
+                "before": {
+                    "status_id": old_status.id,
+                    "status_name": old_status.name,
+                    "rank": old_rank,
+                },
+                "after": {
+                    "status_id": new_status.id,
+                    "status_name": new_status.name,
+                    "rank": new_rank,
+                },
+            },
+        )
 
         return Response(
             {
@@ -559,7 +592,6 @@ class IssueViewSet(TenantScopedViewSet):
             },
             status=http_status.HTTP_200_OK,
         )
-
 
 class CommentViewSet(TenantScopedViewSet):
     serializer_class = CommentSerializer
