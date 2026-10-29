@@ -23,4 +23,5 @@ urlpatterns = [
     path('api/projects/', include('projects.urls')),
     path('api/audit/', include('audit.urls')),
     path('api/transitions/', include('projects.urls')),
+    path('api/webhooks/', include('notifications.urls')),
 ]

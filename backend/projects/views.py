@@ -21,6 +21,8 @@ from django.http import FileResponse
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.decorators import action
 
+from notifications.services import queue_webhook_event
+
 from .models import (
     Project,
     Board,
@@ -698,6 +700,7 @@ class SprintViewSet(TenantScopedViewSet):
 # Issue ViewSet
 # -------------------------
 
+
 class IssueViewSet(TenantScopedViewSet):
     queryset = Issue.objects.select_related(
         "project",
@@ -720,9 +723,29 @@ class IssueViewSet(TenantScopedViewSet):
     search_fields = ["title", "description"]
 
     def perform_create(self, serializer):
-        serializer.save(
+        issue = serializer.save(
             workspace=self.request.workspace,
             reporter=self.request.user,
+        )
+
+        queue_webhook_event(
+            workspace=self.request.workspace,
+            event="issue.created",
+            payload={
+                "event": "issue.created",
+                "issue": {
+                    "id": issue.id,
+                    "title": issue.title,
+                    "description": issue.description,
+                    "project_id": issue.project_id,
+                    "board_id": issue.board_id,
+                    "status_id": issue.status_id,
+                    "priority": issue.priority,
+                    "assignee_id": issue.assignee_id,
+                    "reporter_id": issue.reporter_id,
+                    "workspace": self.request.workspace.slug,
+                },
+            },
         )
 
     @action(detail=True, methods=["post"], url_path="move")
@@ -756,7 +779,6 @@ class IssueViewSet(TenantScopedViewSet):
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
 
-        # Enforce configured outgoing transitions.
         allowed_transitions = WorkflowTransition.objects.filter(
             board_id=issue.board_id,
             from_status_id=issue.status_id,
@@ -813,7 +835,6 @@ class IssueViewSet(TenantScopedViewSet):
             },
             status=http_status.HTTP_200_OK,
         )
-
 
 # -------------------------
 # Comment ViewSet

@@ -145,8 +145,16 @@ urlpatterns = [
     ),
     path("comments/<int:pk>/", comment_detail, name="comment-detail"),
 
-    path("transitions/", transition_list_create, name="transition-list-create"),
-    path("transitions/<int:pk>/", transition_detail, name="transition-detail"),
+    path(
+        "transitions/",
+        transition_list_create,
+        name="transition-list-create",
+    ),
+    path(
+        "transitions/<int:pk>/",
+        transition_detail,
+        name="transition-detail",
+    ),
 
     path(
         "issues/<int:issue_pk>/attachments/",
