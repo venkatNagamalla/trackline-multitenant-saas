@@ -1,5 +1,8 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+
+import uuid
+from django.utils import timezone 
  
  
 class User(AbstractUser):
@@ -24,3 +27,46 @@ class Membership(models.Model):
 
     class Meta:
         unique_together = ("user", "workspace")
+
+class Invitation(models.Model):
+    workspace = models.ForeignKey(
+        Workspace,
+        on_delete=models.CASCADE,
+        related_name="invitations",
+    )
+
+    email = models.EmailField()
+
+    role = models.CharField(
+        max_length=10,
+        choices=Membership.ROLES,
+        default=Membership.MEMBER,
+    )
+
+    token = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        editable=False,
+    )
+
+    accepted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(
+        default=timezone.now,
+        editable=False,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["workspace", "email"],
+                condition=models.Q(accepted_at__isnull=True),
+                name="unique_pending_workspace_invitation",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.email} - {self.workspace.name}"
