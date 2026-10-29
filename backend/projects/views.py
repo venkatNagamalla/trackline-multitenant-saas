@@ -17,6 +17,10 @@ from tenancy.models import User
 from tenancy.mixins import TenantPKField, TenantScopedViewSet
 from tenancy.permissions import IsWorkspaceMember, RolePermission
 
+from django.http import FileResponse
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.decorators import action
+
 from .models import (
     Project,
     Board,
@@ -25,7 +29,10 @@ from .models import (
     Issue,
     Sprint,
     Comment,
+     Attachment,
 )
+
+from .serializers import AttachmentSerializer
 from .permissions import IsCommentAuthorOrWorkspaceAdmin
 
 
@@ -847,3 +854,64 @@ class CommentViewSet(TenantScopedViewSet):
             workspace=self.request.workspace,
             author=self.request.user,
         )
+
+
+# -------------------------
+# Attachment ViewSet
+# -------------------------
+
+class AttachmentViewSet(TenantScopedViewSet):
+    serializer_class = AttachmentSerializer
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        return (
+            Attachment.objects
+            .filter(
+                workspace=self.request.workspace,
+                issue__workspace=self.request.workspace,
+            )
+            .select_related("issue", "uploaded_by", "workspace")
+        )
+
+    def get_permissions(self):
+        return [
+            IsAuthenticated(),
+            IsWorkspaceMember(),
+        ]
+
+    def perform_create(self, serializer):
+        issue = serializer.validated_data["issue"]
+
+        if issue.workspace_id != self.request.workspace.id:
+            raise PermissionDenied(
+                "Issue must belong to the active workspace."
+            )
+
+        serializer.save(
+            workspace=self.request.workspace,
+            uploaded_by=self.request.user,
+        )
+
+    @action(detail=True, methods=["get"], url_path="download")
+    def download(self, request, pk=None):
+        attachment = self.get_object()
+
+        if not attachment.file:
+            return Response(
+                {"detail": "Attachment file not found."},
+                status=http_status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            attachment.file.open("rb")
+            return FileResponse(
+                attachment.file,
+                as_attachment=True,
+                filename=attachment.original_filename,
+            )
+        except (OSError, ValueError):
+            return Response(
+                {"detail": "Unable to read attachment file."},
+                status=http_status.HTTP_404_NOT_FOUND,
+            )

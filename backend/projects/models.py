@@ -1,5 +1,22 @@
 
+import os
+import uuid
+
+from django.core.validators import FileExtensionValidator
 from django.db import models
+
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
+
+
+def attachment_upload_path(instance, filename):
+    extension = os.path.splitext(filename)[1].lower()
+    safe_filename = f"{uuid.uuid4().hex}{extension}"
+
+    return (
+        f"workspaces/{instance.workspace_id}/"
+        f"attachments/{safe_filename}"
+    )
 
 
 class Project(models.Model):
@@ -228,3 +245,62 @@ class Comment(models.Model):
 
     def __str__(self):
         return f"Comment by {self.author} on Issue {self.issue_id}"
+
+
+class Attachment(models.Model):
+    ALLOWED_EXTENSIONS = [
+        "pdf",
+        "png",
+        "jpg",
+        "jpeg",
+        "txt",
+        "csv",
+        "doc",
+        "docx",
+        "xls",
+        "xlsx",
+        "zip",
+    ]
+
+    workspace = models.ForeignKey(
+        "tenancy.Workspace",
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+
+    issue = models.ForeignKey(
+        Issue,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+
+    uploaded_by = models.ForeignKey(
+        "tenancy.User",
+        on_delete=models.PROTECT,
+        related_name="uploaded_attachments",
+    )
+
+    file = models.FileField(
+        upload_to=attachment_upload_path,
+        validators=[
+            FileExtensionValidator(
+                allowed_extensions=ALLOWED_EXTENSIONS,
+            ),
+        ],
+    )
+
+    original_filename = models.CharField(max_length=255)
+    size = models.PositiveBigIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return self.original_filename
+
+
+@receiver(post_delete, sender=Attachment)
+def delete_attachment_file_on_record_delete(sender, instance, **kwargs):
+    if instance.file and instance.file.name:
+        instance.file.delete(save=False)

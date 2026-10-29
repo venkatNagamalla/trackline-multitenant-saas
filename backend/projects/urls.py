@@ -9,6 +9,7 @@ from .views import (
     IssueViewSet,
     SprintViewSet,
     CommentViewSet,
+    AttachmentViewSet,
 )
 
 project_list_create = ProjectListCreateView.as_view({
@@ -103,6 +104,20 @@ transition_detail = WorkflowTransitionViewSet.as_view({
     "delete": "destroy",
 })
 
+attachment_list_create = AttachmentViewSet.as_view({
+    "get": "list",
+    "post": "create",
+})
+
+attachment_detail = AttachmentViewSet.as_view({
+    "delete": "destroy",
+})
+
+attachment_download = AttachmentViewSet.as_view({
+    "get": "download",
+})
+
+
 urlpatterns = [
     path("", project_list_create, name="project-list-create"),
     path("<int:pk>/", project_detail, name="project-detail"),
@@ -115,35 +130,37 @@ urlpatterns = [
 
     path("issues/", issue_list_create, name="issue-list-create"),
     path("issues/<int:pk>/", issue_detail, name="issue-detail"),
+    path("issues/<int:pk>/move/", issue_move, name="issue-move"),
+
+    path("sprints/", sprint_list_create, name="sprint-list-create"),
+    path("sprints/<int:pk>/", sprint_detail, name="sprint-detail"),
+    path("sprints/<int:pk>/start/", sprint_start, name="sprint-start"),
+    path("sprints/<int:pk>/complete/", sprint_complete, name="sprint-complete"),
+    path("sprints/<int:pk>/report/", sprint_report, name="sprint-report"),
 
     path(
-    "issues/<int:pk>/move/",
-    issue_move,
-    name="issue-move",
-),
-path("sprints/", sprint_list_create, name="sprint-list-create"),
-path("sprints/<int:pk>/", sprint_detail, name="sprint-detail"),
-path("sprints/<int:pk>/start/", sprint_start, name="sprint-start"),
-path("sprints/<int:pk>/complete/", sprint_complete, name="sprint-complete"),
-path("sprints/<int:pk>/report/", sprint_report, name="sprint-report"),
-path(
-    "issues/<int:issue_pk>/comments/",
-    comment_list_create,
-    name="issue-comment-list-create",
-),
-path(
-    "comments/<int:pk>/",
-    comment_detail,
-    name="comment-detail",
-),
-path(
-    "transitions/",
-    transition_list_create,
-    name="transition-list-create",
-),
-path(
-    "transitions/<int:pk>/",
-    transition_detail,
-    name="transition-detail",
-),
+        "issues/<int:issue_pk>/comments/",
+        comment_list_create,
+        name="issue-comment-list-create",
+    ),
+    path("comments/<int:pk>/", comment_detail, name="comment-detail"),
+
+    path("transitions/", transition_list_create, name="transition-list-create"),
+    path("transitions/<int:pk>/", transition_detail, name="transition-detail"),
+
+    path(
+        "issues/<int:issue_pk>/attachments/",
+        attachment_list_create,
+        name="issue-attachment-list-create",
+    ),
+    path(
+        "attachments/<int:pk>/",
+        attachment_detail,
+        name="attachment-detail",
+    ),
+    path(
+        "attachments/<int:pk>/download/",
+        attachment_download,
+        name="attachment-download",
+    ),
 ]

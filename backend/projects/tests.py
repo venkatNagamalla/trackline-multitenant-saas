@@ -245,3 +245,101 @@ class WorkspaceIsolationTests(APITestCase):
                 title="Injected Issue",
             ).exists()
         )
+
+class AttachmentCleanupTests(WorkspaceIsolationTests):
+
+    def test_deleting_attachment_removes_physical_file(self):
+        from django.core.files.base import ContentFile
+        from projects.models import Attachment
+
+        storage = Attachment._meta.get_field("file").storage
+        file_content = b"Temporary attachment cleanup test"
+        test_filename = "cleanup-test/trackline-cleanup-test.txt"
+
+        # Create a temporary file in the configured storage.
+        saved_name = storage.save(
+            test_filename,
+            ContentFile(file_content),
+        )
+
+        self.assertTrue(storage.exists(saved_name))
+
+        try:
+            # Create the attachment database record.
+            attachment = Attachment.objects.create(
+                workspace=self.workspace_a,
+                issue=self.issue_a,
+                uploaded_by=self.user_a,
+                file=saved_name,
+                original_filename="trackline-cleanup-test.txt",
+                size=len(file_content),
+            )
+
+            # Delete the record; the post_delete signal should delete the file.
+            attachment.delete()
+
+            self.assertFalse(
+                storage.exists(saved_name),
+                "The physical attachment file should be deleted.",
+            )
+        finally:
+            # Ensure no temporary file is left behind if the test fails.
+            if storage.exists(saved_name):
+                storage.delete(saved_name)
+
+
+class AttachmentWorkspaceIsolationTests(WorkspaceIsolationTests):
+    def setUp(self):
+        super().setUp()
+
+        from django.core.files.base import ContentFile
+        from projects.models import Attachment
+
+        self.attachment = Attachment.objects.create(
+            workspace=self.workspace_a,
+            issue=self.issue_a,
+            uploaded_by=self.user_a,
+            file=ContentFile(
+                b"Private workspace attachment",
+                name="private-test.txt",
+            ),
+            original_filename="private-test.txt",
+            size=len(b"Private workspace attachment"),
+        )
+
+    def test_user_b_cannot_list_user_a_attachments(self):
+        self.authenticate_as_b()
+
+        response = self.client.get(
+            f"/api/projects/issues/{self.issue_a.id}/attachments/",
+            HTTP_X_WORKSPACE=self.workspace_b.slug,
+        )
+
+        self.assertIn(response.status_code, [200, 404])
+        if response.status_code == 200:
+            self.assertEqual(len(response.data.get("results", response.data)), 0)
+
+    def test_user_b_cannot_download_user_a_attachment(self):
+        self.authenticate_as_b()
+
+        response = self.client.get(
+            f"/api/projects/attachments/{self.attachment.id}/download/",
+            HTTP_X_WORKSPACE=self.workspace_b.slug,
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_user_b_cannot_delete_user_a_attachment(self):
+        self.authenticate_as_b()
+
+        response = self.client.delete(
+            f"/api/projects/attachments/{self.attachment.id}/",
+            HTTP_X_WORKSPACE=self.workspace_b.slug,
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+        from projects.models import Attachment
+        self.assertTrue(
+            Attachment.objects.filter(id=self.attachment.id).exists()
+        )
