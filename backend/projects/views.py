@@ -21,6 +21,8 @@ from django.http import FileResponse
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.decorators import action
 
+from billing.limits import check_limit
+
 from notifications.services import queue_webhook_event
 
 from .models import (
@@ -110,6 +112,9 @@ class ProjectListCreateView(TenantScopedViewSet):
     @transaction.atomic
     def perform_create(self, serializer):
         workspace = self.request.workspace
+
+        # Check the workspace project limit
+        check_limit(workspace, "projects")
 
         super().perform_create(serializer)
         project = serializer.instance

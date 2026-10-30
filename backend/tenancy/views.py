@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from audit.models import AuditLog
+from billing.limits import check_limit
 
 from .tasks import send_invitation_email
 
@@ -281,6 +282,15 @@ class InvitationAcceptView(APIView):
             )
             user.save()
 
+        # Check the workspace member limit before creating membership.
+        existing_membership = Membership.objects.filter(
+            user=user,
+            workspace=invitation.workspace,
+        ).exists()
+
+        if not existing_membership:
+            check_limit(invitation.workspace, "members")
+
         # Do not overwrite an existing membership's role.
         membership, created = Membership.objects.get_or_create(
             user=user,
@@ -311,7 +321,6 @@ class InvitationAcceptView(APIView):
             },
             status=status.HTTP_200_OK,
         )
-
 
 class WorkspaceMembersView(APIView):
     permission_classes = [

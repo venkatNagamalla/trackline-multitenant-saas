@@ -1,5 +1,5 @@
 
-import { Outlet, Link } from "react-router-dom";
+import { Outlet, Link, NavLink } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
 
@@ -12,6 +12,26 @@ export default function AppLayout() {
         <Link to="/dashboard" className="app-brand">
           Trackline
         </Link>
+
+        <nav className="flex items-center gap-4">
+          <NavLink
+            to="/dashboard"
+            className={({ isActive }) =>
+              isActive ? "font-bold text-blue-600" : "text-gray-700"
+            }
+          >
+            Dashboard
+          </NavLink>
+
+          <NavLink
+            to="/billing"
+            className={({ isActive }) =>
+              isActive ? "font-bold text-blue-600" : "text-gray-700"
+            }
+          >
+            Billing
+          </NavLink>
+        </nav>
 
         <WorkspaceSwitcher />
 

@@ -1,13 +1,18 @@
-# Python virtual environment
+
+# Python virtual environments
 env/
 venv/
+.venv/
 
 # Python cache files
 __pycache__/
 *.py[cod]
+*$py.class
 
 # Environment variables and secrets
 .env
+.env.*
+!.env.example
 
 # Node.js dependencies
 node_modules/
@@ -17,3 +22,16 @@ media/
 
 # Build output
 dist/
+build/
+
+# Test and coverage files
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Django files
+*.log
+
+# Operating system files
+.DS_Store
+Thumbs.db

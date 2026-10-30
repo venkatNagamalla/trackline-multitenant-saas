@@ -8,6 +8,9 @@ import AuditLogs from "./pages/AuditLogs";
 import Settings from "./pages/Settings";
 import AppLayout from "./components/AppLayout";
 import ProtectedRoute from "./auth/ProtectedRoute";
+import BillingSuccess from "./pages/BillingSuccess";
+import BillingCancel from "./pages/BillingCancel";
+import Billing from "./pages/Billing";
 
 function App() {
   return (
@@ -19,12 +22,12 @@ function App() {
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/projects/:projectId" element={<Board />} />
-          <Route
-            path="/projects/:projectId/sprints"
-            element={<Sprints />}
-          />
+          <Route path="/projects/:projectId/sprints" element={<Sprints />} />
           <Route path="/audit-logs" element={<AuditLogs />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/billing" element={<Billing />} />
+          <Route path="/billing/success" element={<BillingSuccess />} />
+          <Route path="/billing/cancel" element={<BillingCancel />} />
         </Route>
       </Route>
 
