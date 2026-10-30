@@ -3,6 +3,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
+
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -12,6 +13,8 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from audit.models import AuditLog
+
+from .tasks import send_invitation_email
 
 from .models import User, Workspace, Membership, Invitation
 from .permissions import IsWorkspaceMember, RolePermission
@@ -211,6 +214,12 @@ class InvitationCreateView(APIView):
             invitation.role = serializer.validated_data["role"]
             invitation.save(update_fields=["role"])
 
+        # Queue invitation email after the database transaction commits.
+        transaction.on_commit(
+            lambda invitation_id=invitation.id:
+                send_invitation_email.delay(invitation_id)
+        )
+
         return Response(
             {
                 "message": "Invitation created successfully.",
@@ -225,7 +234,6 @@ class InvitationCreateView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
-
 
 class InvitationAcceptView(APIView):
     authentication_classes = []

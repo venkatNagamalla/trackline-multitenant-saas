@@ -160,3 +160,13 @@ MEDIA_ROOT = BASE_DIR / "media"
 CELERY_BROKER_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
 CELERY_TASK_ALWAYS_EAGER = os.environ.get("CELERY_EAGER") == "1"
+
+
+FRONTEND_URL = "http://localhost:5173"
+MAILERS = {
+    "default": {
+        "BACKEND": "django.core.mail.backends.console.EmailBackend",
+    },
+}
+
+DEFAULT_FROM_EMAIL = "Trackline <noreply@trackline.local>"
