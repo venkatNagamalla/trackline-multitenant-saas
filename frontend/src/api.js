@@ -125,7 +125,9 @@ export async function apiRequest(path, options = {}, config = {}) {
 
   if (!response.ok) {
     const message =
-      data?.detail ||
+  response.status === 402
+    ? data?.detail || "Your plan limit has been reached. Please upgrade to Pro."
+    : data?.detail ||
       data?.message ||
       data?.non_field_errors?.[0] ||
       (typeof data === "string" ? data : null) ||

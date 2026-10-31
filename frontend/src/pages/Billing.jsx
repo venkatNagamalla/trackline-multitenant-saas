@@ -1,6 +1,6 @@
 
 import { useCallback, useEffect, useState } from "react";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "../context/useAuth";
 import { apiRequest } from "../api";
 
 function Billing() {

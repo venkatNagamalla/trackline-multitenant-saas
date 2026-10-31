@@ -2,7 +2,6 @@
 import {
   createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useState,
@@ -10,7 +9,7 @@ import {
 
 import { apiRequest, clearStoredTokens } from "../api";
 
-const AuthContext = createContext(null);
+export const AuthContext = createContext(null);
 
 const ACCESS_KEY = "access_token";
 const REFRESH_KEY = "refresh_token";
@@ -124,7 +123,6 @@ export function AuthProvider({ children }) {
         body: JSON.stringify(credentials),
       });
 
-      // Your backend returns tokens inside data.tokens.
       const tokens = data?.tokens ?? data;
 
       if (!tokens?.access || !tokens?.refresh) {
@@ -138,7 +136,6 @@ export function AuthProvider({ children }) {
         refresh: tokens.refresh,
       });
 
-      // The login response already includes the user.
       setUser(data.user ?? null);
 
       if (data.user) {
@@ -147,7 +144,6 @@ export function AuthProvider({ children }) {
 
       setLoading(false);
 
-      // Load workspaces using the existing /auth/me/ endpoint.
       try {
         const profile = await apiRequest("/auth/me/");
 
@@ -160,7 +156,6 @@ export function AuthProvider({ children }) {
         updateWorkspaces(items);
       } catch (error) {
         console.error("Could not load user workspaces:", error);
-        // Login remains successful even if workspace loading fails.
       }
 
       return data;
@@ -270,14 +265,4 @@ export function AuthProvider({ children }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-
-  if (!context) {
-    throw new Error("useAuth must be used inside AuthProvider");
-  }
-
-  return context;
 }

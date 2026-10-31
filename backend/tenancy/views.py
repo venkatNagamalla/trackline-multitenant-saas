@@ -353,7 +353,6 @@ class WorkspaceMembersView(APIView):
             status=status.HTTP_200_OK,
         )
 
-
 class WorkspaceMemberDetailView(APIView):
     permission_classes = [
         IsAuthenticated,

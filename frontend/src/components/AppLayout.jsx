@@ -1,6 +1,6 @@
 
 import { Outlet, Link, NavLink } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "../context/useAuth";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
 
 export default function AppLayout() {

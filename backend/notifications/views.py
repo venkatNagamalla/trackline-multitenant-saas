@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 
 from tenancy.permissions import IsWorkspaceMember
 
-from .models import WebhookEndpoint
+from .models import WebhookEndpoint, WebhookDelivery
 from .serializers import WebhookEndpointSerializer
 
 
@@ -178,3 +178,50 @@ class WebhookTestEventView(APIView):
             },
             status=status.HTTP_202_ACCEPTED,
         )
+
+
+
+class WebhookDeliveryListView(APIView):
+    permission_classes = [IsAuthenticated, IsWorkspaceMember]
+
+    def get(self, request):
+        if request.membership.role != "admin":
+            return Response(
+                {"detail": "Only workspace admins can view webhook deliveries."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        deliveries = WebhookDelivery.objects.filter(
+            endpoint__workspace=request.workspace
+        ).select_related("endpoint").order_by("-created_at")
+
+        endpoint_id = request.query_params.get("endpoint")
+
+        if endpoint_id:
+            if not endpoint_id.isdigit():
+                return Response(
+                    {"detail": "Invalid webhook endpoint ID."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            deliveries = deliveries.filter(endpoint_id=int(endpoint_id))
+
+        results = [
+            {
+                "id": delivery.id,
+                "endpoint_id": delivery.endpoint_id,
+                "endpoint_url": delivery.endpoint.url,
+                "event": delivery.event,
+                "status": delivery.status,
+                "attempts": delivery.attempts,
+                "response_status": delivery.response_status,
+                "response_body": delivery.response_body,
+                "last_error": delivery.last_error,
+                "created_at": delivery.created_at,
+                "last_attempt_at": delivery.last_attempt_at,
+                "delivered_at": delivery.delivered_at,
+            }
+            for delivery in deliveries[:100]
+        ]
+
+        return Response(results)

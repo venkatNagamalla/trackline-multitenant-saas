@@ -1,5 +1,5 @@
 
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "../context/useAuth";
 import { apiRequest } from "../api";
 import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
@@ -14,6 +14,7 @@ export default function Dashboard() {
   const [error, setError] = useState("");
   const [formError, setFormError] = useState("");
   const [success, setSuccess] = useState("");
+  const [upgradeRequired, setUpgradeRequired] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -64,6 +65,7 @@ export default function Dashboard() {
     event.preventDefault();
     setFormError("");
     setSuccess("");
+    setUpgradeRequired(false);
 
     if (!form.name.trim() || !form.key.trim()) {
       setFormError("Project name and key are required.");
@@ -91,22 +93,32 @@ export default function Dashboard() {
       setForm({ name: "", key: "", description: "" });
       setSuccess(`Project "${project.name}" created successfully.`);
     } catch (err) {
-      const detail = err.data;
-      const fieldError =
-        detail && typeof detail === "object"
-          ? Object.entries(detail)
-              .map(([field, messages]) => {
-                const message = Array.isArray(messages)
-                  ? messages.join(" ")
-                  : String(messages);
-                return `${field}: ${message}`;
-              })
-              .join(" ")
-          : "";
+      if (err.status === 402) {
+        setUpgradeRequired(true);
+        setFormError(
+          err.message ||
+            "Your current plan limit has been reached. Please upgrade to Pro."
+        );
+      } else {
+        const detail = err.data;
 
-      setFormError(
-        fieldError || err.message || "Failed to create project."
-      );
+        const fieldError =
+          detail && typeof detail === "object"
+            ? Object.entries(detail)
+                .map(([field, messages]) => {
+                  const message = Array.isArray(messages)
+                    ? messages.join(" ")
+                    : String(messages);
+
+                  return `${field}: ${message}`;
+                })
+                .join(" ")
+            : "";
+
+        setFormError(
+          fieldError || err.message || "Failed to create project."
+        );
+      }
     } finally {
       setCreating(false);
     }
@@ -173,7 +185,28 @@ export default function Dashboard() {
             />
           </div>
 
-          {formError && <p role="alert">{formError}</p>}
+          {formError && (
+            <div role="alert">
+              <p>{formError}</p>
+
+              {upgradeRequired && (
+                <div>
+                  <p>
+                    Upgrade your workspace to Pro to increase your
+                    project limit.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => navigate("/billing")}
+                  >
+                    Upgrade to Pro
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {success && <p role="status">{success}</p>}
 
           <button type="submit" disabled={creating || !currentWorkspace}>
@@ -186,6 +219,7 @@ export default function Dashboard() {
         <h2 id="projects-heading">Projects</h2>
 
         {loading && <p>Loading projects...</p>}
+
         {error && (
           <div role="alert">
             <p>{error}</p>
@@ -209,9 +243,7 @@ export default function Dashboard() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    navigate(`/projects/${project.id}`)
-                  }
+                  onClick={() => navigate(`/projects/${project.id}`)}
                 >
                   Open board
                 </button>

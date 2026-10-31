@@ -1,5 +1,5 @@
 
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "../context/useAuth";
 
 export default function WorkspaceSwitcher() {
   const {

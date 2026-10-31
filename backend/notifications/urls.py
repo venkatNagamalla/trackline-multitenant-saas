@@ -5,6 +5,7 @@ from .views import (
     WebhookEndpointListCreateView,
     WebhookEndpointDetailView,
     WebhookTestEventView,
+    WebhookDeliveryListView
 )
 
 urlpatterns = [
@@ -23,4 +24,9 @@ urlpatterns = [
         WebhookTestEventView.as_view(),
         name="webhook-test",
     ),
+    path(
+    "deliveries/",
+    WebhookDeliveryListView.as_view(),
+    name="webhook-deliveries",
+),
 ]
