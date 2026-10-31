@@ -1,24 +1,30 @@
+
 import { useEffect, useState } from "react";
 import { apiRequest } from "../api";
 
-const WEBHOOK_EVENTS = ["issue.created", "issue.moved", "sprint.completed"];
+const WEBHOOK_EVENTS = [
+  "issue.created",
+  "issue.moved",
+  "sprint.completed",
+];
 
 const buttonPrimary =
-  "rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50";
+  "rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50";
 
 const buttonSecondary =
-  "rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50";
+  "rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 disabled:cursor-not-allowed disabled:opacity-50";
 
 const inputClass =
-  "mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20";
+  "mt-2 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-4 focus:ring-violet-100";
 
 function StatusBadge({ status }) {
   const styles = {
-    success: "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20",
-    pending: "bg-amber-500/10 text-amber-400 ring-amber-500/20",
-    failed: "bg-rose-500/10 text-rose-400 ring-rose-500/20",
-    active: "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20",
-    inactive: "bg-slate-500/10 text-slate-400 ring-slate-500/20",
+    success: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+    pending: "bg-amber-50 text-amber-700 ring-amber-100",
+    failed: "bg-rose-50 text-rose-700 ring-rose-100",
+    active: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+    inactive: "bg-slate-100 text-slate-500 ring-slate-200",
+    completed: "bg-violet-50 text-violet-700 ring-violet-100",
   };
 
   const normalized = String(status || "").toLowerCase();
@@ -34,9 +40,50 @@ function StatusBadge({ status }) {
   );
 }
 
+function SectionHeader({ eyebrow, title, description, action }) {
+  return (
+    <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+      <div>
+        {eyebrow && (
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.15em] text-violet-600">
+            {eyebrow}
+          </p>
+        )}
+        <h2 className="text-lg font-bold tracking-tight text-slate-900 sm:text-xl">
+          {title}
+        </h2>
+        {description && (
+          <p className="mt-1 text-sm text-slate-500">{description}</p>
+        )}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function LoadingMessage({ text }) {
+  return (
+    <div className="flex min-h-32 w-full flex-col items-center justify-center gap-3">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-violet-100 border-t-violet-600" />
+      <p className="text-sm font-medium text-slate-500">{text}</p>
+    </div>
+  );
+}
+
+function EmptyState({ title, description }) {
+  return (
+    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-5 py-10 text-center">
+      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-violet-50 text-xl text-violet-500">
+        ◇
+      </div>
+      <p className="mt-3 text-sm font-bold text-slate-700">{title}</p>
+      <p className="mt-1 text-xs text-slate-500">{description}</p>
+    </div>
+  );
+}
+
 function formatDate(value) {
   if (!value) return "—";
-
   return new Date(value).toLocaleString();
 }
 
@@ -92,7 +139,8 @@ export default function Settings() {
       ]);
 
       const statusResults = statusData?.results ?? statusData ?? [];
-      const transitionResults = transitionData?.results ?? transitionData ?? [];
+      const transitionResults =
+        transitionData?.results ?? transitionData ?? [];
 
       setStatuses(statusResults);
       setTransitions(transitionResults);
@@ -160,7 +208,6 @@ export default function Settings() {
 
   async function refreshWebhookData() {
     setError("");
-
     await Promise.all([loadWebhooks(), loadDeliveries()]);
   }
 
@@ -341,7 +388,6 @@ export default function Settings() {
 
   async function changeOrder(status, direction) {
     const index = boardStatuses.findIndex((item) => item.id === status.id);
-
     const other = boardStatuses[index + direction];
 
     if (!other) return;
@@ -480,7 +526,6 @@ export default function Settings() {
       });
 
       setMessage(result.detail || "Test webhook queued successfully.");
-
       await refreshWebhookData();
     } catch (err) {
       setError(err.message || "Failed to test webhook.");
@@ -540,875 +585,712 @@ export default function Settings() {
     }
   }
 
+  async function copyInvitationLink() {
+    if (!createdInvitation?.invite_link) return;
+
+    const link = createdInvitation.invite_link.startsWith("http")
+      ? createdInvitation.invite_link
+      : `${window.location.origin}/${createdInvitation.invite_link.replace(/^\/+/, "")}`;
+
+    try {
+      await navigator.clipboard.writeText(link);
+      setInviteCopied(true);
+      setMessage("Invitation link copied successfully.");
+      window.setTimeout(() => setInviteCopied(false), 2000);
+    } catch {
+      setError("Failed to copy invitation link.");
+    }
+  }
+
   // ---------------- UI ----------------
 
   return (
-    <div className="min-h-screen bg-slate-950 px-4 py-8 text-slate-100 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-8">
-        {/* PAGE HEADER */}
+    <div className="mx-auto w-full max-w-[1400px] space-y-8">
 
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-400">
-            Workspace Configuration
-          </p>
-
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-            Settings
-          </h1>
-
-          <p className="mt-2 text-slate-400">
-            Manage workflows, integrations, and webhook activity.
+      {/* PAGE HEADER */}
+      <header>
+        <div className="mb-2 flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-violet-500" />
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-600">
+            Workspace configuration
           </p>
         </div>
 
-        {/* FEEDBACK */}
+        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+          Settings
+        </h1>
 
-        {error && (
-          <div
-            role="alert"
-            className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300"
-          >
-            {error}
-          </div>
-        )}
+        <p className="mt-2 text-sm text-slate-500">
+          Manage your team, workflows, integrations, and workspace activity.
+        </p>
+      </header>
 
-        {message && (
-          <div
-            role="status"
-            className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-300"
-          >
-            {message}
-          </div>
-        )}
+      {/* FEEDBACK */}
+      {error && (
+        <div
+          role="alert"
+          className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-medium text-rose-700"
+        >
+          {error}
+        </div>
+      )}
 
-        {/* WORKSPACE MEMBERS */}
+      {message && (
+        <div
+          role="status"
+          className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-700"
+        >
+          {message}
+        </div>
+      )}
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl shadow-black/10 sm:p-7">
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-white">Workspace Members</h2>
-            <p className="mt-1 text-sm text-slate-400">
-              View workspace members, manage their roles, and remove access when
-              needed.
-            </p>
-          </div>
+      {/* WORKSPACE MEMBERS */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-7">
+        <SectionHeader
+          eyebrow="Team management"
+          title="Workspace Members"
+          description="View workspace members, manage their roles, and control access."
+        />
 
-          {membersLoading ? (
-            <p className="text-sm text-slate-400">
-              Loading workspace members...
-            </p>
-          ) : members.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-700 p-6 text-center text-sm text-slate-400">
-              No workspace members found.
-            </div>
-          ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-800">
-              <table className="min-w-full divide-y divide-slate-800 text-sm">
-                <thead className="bg-slate-950">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-400">
-                      Member
-                    </th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-400">
-                      Role
-                    </th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-400">
-                      Actions
-                    </th>
+        {membersLoading ? (
+          <LoadingMessage text="Loading workspace members..." />
+        ) : members.length === 0 ? (
+          <EmptyState
+            title="No workspace members found"
+            description="Workspace members will appear here."
+          />
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="min-w-full divide-y divide-slate-100 text-sm">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    Member
+                  </th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    Role
+                  </th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-slate-100">
+                {members.map((member) => (
+                  <tr
+                    key={member.id}
+                    className="transition hover:bg-violet-50/30"
+                  >
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-700">
+                          {(member.username || member.email || "U")
+                            .slice(0, 2)
+                            .toUpperCase()}
+                        </span>
+
+                        <div>
+                          <p className="font-semibold text-slate-800">
+                            {member.username}
+                          </p>
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            {member.email}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-4">
+                      <select
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 disabled:opacity-50"
+                        value={member.role}
+                        disabled={memberActionId === member.id}
+                        onChange={(event) =>
+                          updateMemberRole(member, event.target.value)
+                        }
+                        aria-label={`Role for ${member.email}`}
+                      >
+                        <option value="admin">Admin</option>
+                        <option value="member">Member</option>
+                        <option value="viewer">Viewer</option>
+                      </select>
+                    </td>
+
+                    <td className="px-4 py-4">
+                      <button
+                        type="button"
+                        className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 disabled:opacity-50"
+                        disabled={memberActionId === member.id}
+                        onClick={() => removeMember(member)}
+                      >
+                        {memberActionId === member.id ? "Working..." : "Remove"}
+                      </button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {members.map((member) => (
-                    <tr
-                      key={member.id}
-                      className="transition hover:bg-slate-800/30"
-                    >
-                      <td className="px-4 py-4">
-                        <p className="font-medium text-white">
-                          {member.username}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-400">
-                          {member.email}
-                        </p>
-                      </td>
-                      <td className="px-4 py-4">
-                        <select
-                          className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500 disabled:opacity-50"
-                          value={member.role}
-                          disabled={memberActionId === member.id}
-                          onChange={(event) =>
-                            updateMemberRole(member, event.target.value)
-                          }
-                          aria-label={`Role for ${member.email}`}
-                        >
-                          <option value="admin">Admin</option>
-                          <option value="member">Member</option>
-                          <option value="viewer">Viewer</option>
-                        </select>
-                      </td>
-                      <td className="px-4 py-4">
-                        <button
-                          type="button"
-                          className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-300 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                          disabled={memberActionId === member.id}
-                          onClick={() => removeMember(member)}
-                        >
-                          {memberActionId === member.id
-                            ? "Working..."
-                            : "Remove"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
-        {/* WORKSPACE INVITATIONS */}
+      {/* WORKSPACE INVITATIONS */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-7">
+        <SectionHeader
+          eyebrow="Grow your team"
+          title="Invite a Workspace Member"
+          description="Invite teammates and choose the access role they will receive."
+        />
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl shadow-black/10 sm:p-7">
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-white">
-              Invite a Workspace Member
-            </h2>
-            <p className="mt-1 text-sm text-slate-400">
-              Send an invitation by email and choose the role the new member
-              will receive.
-            </p>
+        <form
+          onSubmit={createInvitation}
+          className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_180px_auto] sm:items-end"
+        >
+          <div>
+            <label
+              htmlFor="invite-email"
+              className="text-sm font-semibold text-slate-700"
+            >
+              Email address
+            </label>
+            <input
+              id="invite-email"
+              type="email"
+              className={inputClass}
+              placeholder="teammate@example.com"
+              value={inviteEmail}
+              onChange={(event) => setInviteEmail(event.target.value)}
+              required
+            />
           </div>
 
-          <form
-            onSubmit={createInvitation}
-            className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_180px_auto] sm:items-end"
-          >
-            <div>
-              <label
-                htmlFor="invite-email"
-                className="text-sm font-medium text-slate-300"
-              >
-                Email address
-              </label>
-              <input
-                id="invite-email"
-                type="email"
-                className={inputClass}
-                placeholder="teammate@example.com"
-                value={inviteEmail}
-                onChange={(event) => setInviteEmail(event.target.value)}
-                required
-              />
-            </div>
+          <div>
+            <label
+              htmlFor="invite-role"
+              className="text-sm font-semibold text-slate-700"
+            >
+              Workspace role
+            </label>
+            <select
+              id="invite-role"
+              className={inputClass}
+              value={inviteRole}
+              onChange={(event) => setInviteRole(event.target.value)}
+            >
+              <option value="member">Member</option>
+              <option value="viewer">Viewer</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
 
-            <div>
+          <button
+            type="submit"
+            className={buttonPrimary}
+            disabled={invitationLoading}
+          >
+            {invitationLoading ? "Sending..." : "Send Invitation"}
+          </button>
+        </form>
+
+        {createdInvitation && (
+          <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
+            <p className="font-semibold text-emerald-800">
+              Invitation created successfully
+            </p>
+            <p className="mt-1 text-sm text-emerald-700">
+              {createdInvitation.email} · {createdInvitation.role}
+            </p>
+
+            {createdInvitation.invite_link && (
+              <div className="mt-4">
+                <label className="mb-2 block text-xs font-semibold text-slate-600">
+                  Invitation link
+                </label>
+
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    readOnly
+                    value={
+                      createdInvitation.invite_link.startsWith("http")
+                        ? createdInvitation.invite_link
+                        : `${window.location.origin}/${createdInvitation.invite_link.replace(/^\/+/, "")}`
+                    }
+                    className="min-w-0 flex-1 rounded-xl border border-emerald-200 bg-white px-3 py-2.5 text-sm text-slate-600"
+                    aria-label="Invitation link"
+                  />
+
+                  <button
+                    type="button"
+                    className={buttonSecondary}
+                    onClick={copyInvitationLink}
+                  >
+                    {inviteCopied ? "Copied ✓" : "Copy link"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <p className="mt-4 text-xs leading-relaxed text-slate-400">
+          Only workspace admins can manage members and create invitations.
+          Pending invitation listing is not currently exposed by the backend API.
+        </p>
+      </section>
+
+      {/* WORKFLOW SETTINGS */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-7">
+        <SectionHeader
+          eyebrow="Project configuration"
+          title="Workflow Settings"
+          description="Configure board statuses and allowed issue transitions."
+        />
+
+        {loading ? (
+          <LoadingMessage text="Loading workflow settings..." />
+        ) : (
+          <>
+            <div className="mb-7 max-w-sm">
               <label
-                htmlFor="invite-role"
-                className="text-sm font-medium text-slate-300"
+                htmlFor="workflow-board"
+                className="text-sm font-semibold text-slate-700"
               >
-                Workspace role
+                Select board
               </label>
+
               <select
-                id="invite-role"
+                id="workflow-board"
                 className={inputClass}
-                value={inviteRole}
-                onChange={(event) => setInviteRole(event.target.value)}
+                value={boardId}
+                onChange={(event) => {
+                  setBoardId(event.target.value);
+                  setError("");
+                  setMessage("");
+                }}
               >
-                <option value="member">Member</option>
-                <option value="viewer">Viewer</option>
-                <option value="admin">Admin</option>
+                {boards.map((id) => (
+                  <option key={id} value={String(id)}>
+                    Board {id}
+                  </option>
+                ))}
               </select>
             </div>
 
-            <button
-              type="submit"
-              className={buttonPrimary}
-              disabled={invitationLoading}
-            >
-              {invitationLoading ? "Sending..." : "Send Invitation"}
-            </button>
-          </form>
-
-          {createdInvitation && (
-            <div className="mt-5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-              <p className="font-semibold text-emerald-300">
-                Invitation created
-              </p>
-              <p className="mt-1 text-sm text-slate-300">
-                {createdInvitation.email} · {createdInvitation.role}
-              </p>
-              {createdInvitation.invite_link && (
-                <div className="mt-3">
-                  <p className="mb-2 text-xs text-slate-400">Invitation link</p>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <input
-                      readOnly
-                      value={
-                        createdInvitation.invite_link.startsWith("http")
-                          ? createdInvitation.invite_link
-                          : `${window.location.origin}/${createdInvitation.invite_link.replace(/^\/+/, "")}`
-                      }
-                      className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300"
-                      aria-label="Invitation link"
-                    />
-                    <button
-                      type="button"
-                      className={buttonSecondary}
-                      onClick={async () => {
-                        const link = createdInvitation.invite_link.startsWith(
-                          "http",
-                        )
-                          ? createdInvitation.invite_link
-                          : `${window.location.origin}/${createdInvitation.invite_link.replace(/^\/+/, "")}`;
-
-                        try {
-                          await navigator.clipboard.writeText(link);
-                          setInviteCopied(true);
-                          setMessage("Invitation link copied successfully.");
-                          setInviteCopied(true);
-                          setMessage("Invitation link copied successfully.");
-
-                          setTimeout(() => {
-                            setInviteCopied(false);
-                          }, 2000);
-                        } catch {
-                          setError("Failed to copy invitation link.");
-                        }
-                      }}
-                    >
-                      {inviteCopied ? "Copied ✓" : "Copy link"}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          <p className="mt-4 text-xs text-slate-500">
-            Only workspace admins can manage members and create invitations.
-            Pending invitation listing is not currently exposed by the backend
-            API.
-          </p>
-        </section>
-
-        {/* WORKFLOW SETTINGS */}
-
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl shadow-black/10 sm:p-7">
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-white">Workflow Settings</h2>
-            <p className="mt-1 text-sm text-slate-400">
-              Configure board statuses and allowed status transitions.
-            </p>
-          </div>
-
-          {loading ? (
-            <p className="text-sm text-slate-400">
-              Loading workflow settings...
-            </p>
-          ) : (
-            <>
-              <div className="mb-6 max-w-sm">
-                <label
-                  htmlFor="workflow-board"
-                  className="text-sm font-medium text-slate-300"
-                >
-                  Select board
-                </label>
-
-                <select
-                  id="workflow-board"
-                  className={inputClass}
-                  value={boardId}
-                  onChange={(event) => {
-                    setBoardId(event.target.value);
-                    setError("");
-                    setMessage("");
-                  }}
-                >
-                  {boards.map((id) => (
-                    <option key={id} value={String(id)}>
-                      Board {id}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* STATUS LIST */}
-
-              <div className="mb-8">
-                <h3 className="mb-3 text-lg font-semibold text-white">
+            {/* STATUS LIST */}
+            <div className="mb-8">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-base font-bold text-slate-800">
                   Workflow Statuses
                 </h3>
+                <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">
+                  {boardStatuses.length} statuses
+                </span>
+              </div>
 
-                {boardStatuses.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-slate-700 p-5 text-sm text-slate-400">
-                    No statuses found for this board.
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {boardStatuses.map((status, index) => (
-                      <div
-                        key={status.id}
-                        className="flex flex-col justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 p-4 sm:flex-row sm:items-center"
-                      >
-                        {editingId === status.id ? (
-                          <div className="flex flex-1 flex-wrap gap-2">
-                            <input
-                              className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"
-                              value={editName}
-                              onChange={(event) =>
-                                setEditName(event.target.value)
-                              }
-                              aria-label="New status name"
-                            />
+              {boardStatuses.length === 0 ? (
+                <EmptyState
+                  title="No statuses found"
+                  description="Add a status to configure this board."
+                />
+              ) : (
+                <div className="space-y-3">
+                  {boardStatuses.map((status, index) => (
+                    <div
+                      key={status.id}
+                      className="flex flex-col justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4 sm:flex-row sm:items-center"
+                    >
+                      {editingId === status.id ? (
+                        <div className="flex flex-1 flex-wrap gap-2">
+                          <input
+                            className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-violet-400"
+                            value={editName}
+                            onChange={(event) =>
+                              setEditName(event.target.value)
+                            }
+                            aria-label="New status name"
+                          />
 
+                          <button
+                            className={buttonPrimary}
+                            disabled={saving}
+                            onClick={() => renameStatus(status)}
+                          >
+                            Save
+                          </button>
+
+                          <button
+                            className={buttonSecondary}
+                            disabled={saving}
+                            onClick={() => setEditingId(null)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-semibold text-slate-800">
+                                {status.name}
+                              </span>
+                              {status.is_done && (
+                                <StatusBadge status="Completed" />
+                              )}
+                            </div>
+                            <p className="mt-1 text-xs text-slate-400">
+                              Position {status.order}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
                             <button
-                              className={buttonPrimary}
+                              className={buttonSecondary}
                               disabled={saving}
-                              onClick={() => renameStatus(status)}
+                              onClick={() => {
+                                setEditingId(status.id);
+                                setEditName(status.name);
+                              }}
                             >
-                              Save
+                              Rename
                             </button>
 
                             <button
                               className={buttonSecondary}
-                              disabled={saving}
-                              onClick={() => setEditingId(null)}
+                              disabled={saving || index === 0}
+                              onClick={() => changeOrder(status, -1)}
+                              aria-label={`Move ${status.name} up`}
                             >
-                              Cancel
+                              ↑
+                            </button>
+
+                            <button
+                              className={buttonSecondary}
+                              disabled={
+                                saving || index === boardStatuses.length - 1
+                              }
+                              onClick={() => changeOrder(status, 1)}
+                              aria-label={`Move ${status.name} down`}
+                            >
+                              ↓
+                            </button>
+
+                            <button
+                              className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-100 disabled:opacity-50"
+                              disabled={saving}
+                              onClick={() => deleteStatus(status)}
+                            >
+                              Delete
                             </button>
                           </div>
-                        ) : (
-                          <>
-                            <div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-semibold text-white">
-                                  {status.name}
-                                </span>
-
-                                {status.is_done && (
-                                  <StatusBadge status="Completed" />
-                                )}
-                              </div>
-
-                              <p className="mt-1 text-xs text-slate-500">
-                                Order: {status.order}
-                              </p>
-                            </div>
-
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                className={buttonSecondary}
-                                disabled={saving}
-                                onClick={() => {
-                                  setEditingId(status.id);
-                                  setEditName(status.name);
-                                }}
-                              >
-                                Rename
-                              </button>
-
-                              <button
-                                className={buttonSecondary}
-                                disabled={saving || index === 0}
-                                onClick={() => changeOrder(status, -1)}
-                                aria-label={`Move ${status.name} up`}
-                              >
-                                ↑
-                              </button>
-
-                              <button
-                                className={buttonSecondary}
-                                disabled={
-                                  saving || index === boardStatuses.length - 1
-                                }
-                                onClick={() => changeOrder(status, 1)}
-                                aria-label={`Move ${status.name} down`}
-                              >
-                                ↓
-                              </button>
-
-                              <button
-                                className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-300 transition hover:bg-rose-500/20 disabled:opacity-50"
-                                disabled={saving}
-                                onClick={() => deleteStatus(status)}
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* ADD STATUS */}
-
-              <div className="mb-8 rounded-xl border border-slate-800 bg-slate-950/50 p-5">
-                <h3 className="text-lg font-semibold text-white">
-                  Add a Status
-                </h3>
-
-                <form
-                  onSubmit={addStatus}
-                  className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end"
-                >
-                  <div className="flex-1">
-                    <label
-                      htmlFor="new-status-name"
-                      className="text-sm font-medium text-slate-300"
-                    >
-                      Status name
-                    </label>
-
-                    <input
-                      id="new-status-name"
-                      className={inputClass}
-                      value={newName}
-                      onChange={(event) => setNewName(event.target.value)}
-                      maxLength={50}
-                      placeholder="e.g. In Review"
-                      required
-                    />
-                  </div>
-
-                  <label className="flex items-center gap-2 text-sm text-slate-300">
-                    <input
-                      type="checkbox"
-                      checked={newIsDone}
-                      onChange={(event) => setNewIsDone(event.target.checked)}
-                      className="h-4 w-4 accent-indigo-500"
-                    />
-                    Completed status
-                  </label>
-
-                  <button
-                    type="submit"
-                    className={buttonPrimary}
-                    disabled={saving || !boardId}
-                  >
-                    {saving ? "Saving..." : "Add Status"}
-                  </button>
-                </form>
-              </div>
-
-              {/* TRANSITIONS */}
-
-              <div>
-                <h3 className="text-lg font-semibold text-white">
-                  Allowed Transitions
-                </h3>
-
-                <p className="mt-1 text-sm text-slate-400">
-                  Control which statuses users can move issues between.
-                </p>
-
-                <div className="my-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-200">
-                  <strong>Important:</strong> If a status has no outgoing
-                  transitions enabled, all destination statuses are allowed by
-                  default. To restrict movement, enable at least one outgoing
-                  transition and leave unwanted destinations unchecked.
+                        </>
+                      )}
+                    </div>
+                  ))}
                 </div>
-
-                {boardStatuses.length < 2 ? (
-                  <p className="text-sm text-slate-400">
-                    Add at least two statuses to configure transitions.
-                  </p>
-                ) : (
-                  <div className="overflow-x-auto rounded-xl border border-slate-800">
-                    <table className="min-w-full divide-y divide-slate-800 text-sm">
-                      <thead className="bg-slate-950">
-                        <tr>
-                          <th className="px-4 py-3 text-left font-semibold text-slate-300">
-                            From / To
-                          </th>
-
-                          {boardStatuses.map((status) => (
-                            <th
-                              key={status.id}
-                              className="px-4 py-3 text-center font-semibold text-slate-300"
-                            >
-                              {status.name}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-
-                      <tbody className="divide-y divide-slate-800">
-                        {boardStatuses.map((fromStatus) => (
-                          <tr key={fromStatus.id}>
-                            <th className="bg-slate-950/50 px-4 py-3 text-left font-medium text-white">
-                              {fromStatus.name}
-                            </th>
-
-                            {boardStatuses.map((toStatus) => {
-                              const sameStatus = fromStatus.id === toStatus.id;
-
-                              return (
-                                <td
-                                  key={toStatus.id}
-                                  className="px-4 py-3 text-center"
-                                >
-                                  {sameStatus ? (
-                                    <span className="text-slate-600">—</span>
-                                  ) : (
-                                    <input
-                                      type="checkbox"
-                                      className="h-4 w-4 accent-indigo-500"
-                                      aria-label={`${fromStatus.name} to ${toStatus.name}`}
-                                      checked={hasTransition(
-                                        fromStatus.id,
-                                        toStatus.id,
-                                      )}
-                                      disabled={saving}
-                                      onChange={(event) =>
-                                        toggleTransition(
-                                          fromStatus.id,
-                                          toStatus.id,
-                                          event.target.checked,
-                                        )
-                                      }
-                                    />
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </section>
-
-        {/* WEBHOOK SETTINGS */}
-
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl shadow-black/10 sm:p-7">
-          <div className="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-            <div>
-              <h2 className="text-xl font-bold text-white">
-                Webhook Integrations
-              </h2>
-              <p className="mt-1 text-sm text-slate-400">
-                Connect external applications and receive Trackline events.
-              </p>
+              )}
             </div>
 
+            {/* ADD STATUS */}
+            <div className="mb-8 rounded-xl border border-slate-200 bg-slate-50/70 p-5">
+              <h3 className="text-base font-bold text-slate-800">
+                Add a Status
+              </h3>
+
+              <form
+                onSubmit={addStatus}
+                className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end"
+              >
+                <div className="flex-1">
+                  <label
+                    htmlFor="new-status-name"
+                    className="text-sm font-semibold text-slate-700"
+                  >
+                    Status name
+                  </label>
+
+                  <input
+                    id="new-status-name"
+                    className={inputClass}
+                    value={newName}
+                    onChange={(event) => setNewName(event.target.value)}
+                    maxLength={50}
+                    placeholder="e.g. In Review"
+                    required
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={newIsDone}
+                    onChange={(event) => setNewIsDone(event.target.checked)}
+                    className="h-4 w-4 accent-violet-600"
+                  />
+                  Completed status
+                </label>
+
+                <button
+                  type="submit"
+                  className={buttonPrimary}
+                  disabled={saving || !boardId}
+                >
+                  {saving ? "Saving..." : "Add Status"}
+                </button>
+              </form>
+            </div>
+
+            {/* TRANSITIONS */}
+            <div>
+              <h3 className="text-base font-bold text-slate-800">
+                Allowed Transitions
+              </h3>
+
+              <p className="mt-1 text-sm text-slate-500">
+                Control which statuses users can move issues between.
+              </p>
+
+              <div className="my-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-800">
+                <strong>Important:</strong> If a status has no outgoing
+                transitions enabled, all destination statuses are allowed by
+                default. To restrict movement, enable at least one outgoing
+                transition and leave unwanted destinations unchecked.
+              </div>
+
+              {boardStatuses.length < 2 ? (
+                <EmptyState
+                  title="Not enough statuses"
+                  description="Add at least two statuses to configure transitions."
+                />
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="min-w-full divide-y divide-slate-100 text-sm">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                          From / To
+                        </th>
+                        {boardStatuses.map((status) => (
+                          <th
+                            key={status.id}
+                            className="px-4 py-3 text-center font-semibold text-slate-600"
+                          >
+                            {status.name}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+
+                    <tbody className="divide-y divide-slate-100">
+                      {boardStatuses.map((fromStatus) => (
+                        <tr key={fromStatus.id} className="hover:bg-slate-50">
+                          <th className="bg-slate-50/70 px-4 py-3 text-left font-semibold text-slate-700">
+                            {fromStatus.name}
+                          </th>
+
+                          {boardStatuses.map((toStatus) => {
+                            const sameStatus = fromStatus.id === toStatus.id;
+
+                            return (
+                              <td
+                                key={toStatus.id}
+                                className="px-4 py-3 text-center"
+                              >
+                                {sameStatus ? (
+                                  <span className="text-slate-300">—</span>
+                                ) : (
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 accent-violet-600"
+                                    aria-label={`${fromStatus.name} to ${toStatus.name}`}
+                                    checked={hasTransition(
+                                      fromStatus.id,
+                                      toStatus.id,
+                                    )}
+                                    disabled={saving}
+                                    onChange={(event) =>
+                                      toggleTransition(
+                                        fromStatus.id,
+                                        toStatus.id,
+                                        event.target.checked,
+                                      )
+                                    }
+                                  />
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </section>
+
+      {/* WEBHOOK SETTINGS */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-7">
+        <SectionHeader
+          eyebrow="External integrations"
+          title="Webhook Integrations"
+          description="Connect external applications and receive Trackline events."
+          action={
             <button
               className={buttonSecondary}
               onClick={refreshWebhookData}
               disabled={webhooksLoading || deliveriesLoading}
             >
-              Refresh Data
+              ↻ Refresh Data
             </button>
-          </div>
+          }
+        />
 
-          {/* CREATE WEBHOOK */}
+        {/* CREATE WEBHOOK */}
+        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-5">
+          <h3 className="text-base font-bold text-slate-800">
+            Register a New Webhook
+          </h3>
 
-          <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-5">
-            <h3 className="text-lg font-semibold text-white">
-              Register a New Webhook
-            </h3>
-
-            <form onSubmit={createWebhook} className="mt-4 space-y-5">
-              <div>
-                <label
-                  htmlFor="webhook-url"
-                  className="text-sm font-medium text-slate-300"
-                >
-                  Webhook URL
-                </label>
-
-                <input
-                  id="webhook-url"
-                  type="url"
-                  className={inputClass}
-                  placeholder="https://example.com/webhooks/trackline"
-                  value={webhookUrl}
-                  onChange={(event) => setWebhookUrl(event.target.value)}
-                  required
-                />
-              </div>
-
-              <fieldset>
-                <legend className="text-sm font-medium text-slate-300">
-                  Select Events
-                </legend>
-
-                <div className="mt-3 flex flex-wrap gap-3">
-                  {WEBHOOK_EVENTS.map((eventName) => (
-                    <label
-                      key={eventName}
-                      className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-300 transition hover:border-indigo-500"
-                    >
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 accent-indigo-500"
-                        checked={webhookEvents.includes(eventName)}
-                        onChange={() => toggleWebhookEvent(eventName)}
-                      />
-                      {eventName}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-
-              <button type="submit" className={buttonPrimary} disabled={saving}>
-                {saving ? "Registering..." : "Register Webhook"}
-              </button>
-            </form>
-          </div>
-
-          {/* REGISTERED WEBHOOKS */}
-
-          <div className="mt-8">
-            <h3 className="mb-4 text-lg font-semibold text-white">
-              Registered Webhooks
-            </h3>
-
-            {webhooksLoading ? (
-              <p className="text-sm text-slate-400">Loading webhooks...</p>
-            ) : webhooks.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-700 p-6 text-center text-sm text-slate-400">
-                No webhooks registered yet.
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-800">
-                <table className="min-w-full divide-y divide-slate-800 text-sm">
-                  <thead className="bg-slate-950">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-slate-400">
-                        Webhook URL
-                      </th>
-                      <th className="px-4 py-3 text-left text-slate-400">
-                        Events
-                      </th>
-                      <th className="px-4 py-3 text-left text-slate-400">
-                        Status
-                      </th>
-                      <th className="px-4 py-3 text-left text-slate-400">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody className="divide-y divide-slate-800">
-                    {webhooks.map((webhook) => (
-                      <tr
-                        key={webhook.id}
-                        className="transition hover:bg-slate-800/30"
-                      >
-                        <td className="max-w-xs break-all px-4 py-4 text-slate-300">
-                          {webhook.url}
-                        </td>
-
-                        <td className="px-4 py-4">
-                          <div className="flex flex-wrap gap-1">
-                            {webhook.events?.map((eventName) => (
-                              <span
-                                key={eventName}
-                                className="rounded-md bg-indigo-500/10 px-2 py-1 text-xs text-indigo-300"
-                              >
-                                {eventName}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-
-                        <td className="px-4 py-4">
-                          <StatusBadge
-                            status={webhook.active ? "Active" : "Inactive"}
-                          />
-                        </td>
-
-                        <td className="px-4 py-4">
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              className={buttonPrimary}
-                              disabled={saving || !webhook.active}
-                              onClick={() => testWebhook(webhook)}
-                            >
-                              Test
-                            </button>
-
-                            <button
-                              className={buttonSecondary}
-                              disabled={saving}
-                              onClick={() => toggleWebhookActive(webhook)}
-                            >
-                              {webhook.active ? "Deactivate" : "Activate"}
-                            </button>
-
-                            <button
-                              className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-300 transition hover:bg-rose-500/20 disabled:opacity-50"
-                              disabled={saving}
-                              onClick={() => deleteWebhook(webhook)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* WEBHOOK DELIVERY HISTORY */}
-
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl shadow-black/10 sm:p-7">
-          <div className="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <form onSubmit={createWebhook} className="mt-4 space-y-5">
             <div>
-              <h2 className="text-xl font-bold text-white">
-                Webhook Delivery History
-              </h2>
+              <label
+                htmlFor="webhook-url"
+                className="text-sm font-semibold text-slate-700"
+              >
+                Webhook URL
+              </label>
 
-              <p className="mt-1 text-sm text-slate-400">
-                Monitor webhook attempts, responses, and delivery status.
-              </p>
+              <input
+                id="webhook-url"
+                type="url"
+                className={inputClass}
+                placeholder="https://example.com/webhooks/trackline"
+                value={webhookUrl}
+                onChange={(event) => setWebhookUrl(event.target.value)}
+                required
+              />
             </div>
 
-            <button
-              className={buttonSecondary}
-              onClick={loadDeliveries}
-              disabled={deliveriesLoading}
-            >
-              {deliveriesLoading ? "Refreshing..." : "Refresh History"}
+            <fieldset>
+              <legend className="text-sm font-semibold text-slate-700">
+                Select Events
+              </legend>
+
+              <div className="mt-3 flex flex-wrap gap-3">
+                {WEBHOOK_EVENTS.map((eventName) => (
+                  <label
+                    key={eventName}
+                    className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:border-violet-300 hover:bg-violet-50"
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-violet-600"
+                      checked={webhookEvents.includes(eventName)}
+                      onChange={() => toggleWebhookEvent(eventName)}
+                    />
+                    {eventName}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <button type="submit" className={buttonPrimary} disabled={saving}>
+              {saving ? "Registering..." : "Register Webhook"}
             </button>
-          </div>
+          </form>
+        </div>
 
-          {/* DELIVERY SUMMARY */}
+        {/* REGISTERED WEBHOOKS */}
+        <div className="mt-8">
+          <h3 className="mb-4 text-base font-bold text-slate-800">
+            Registered Webhooks
+          </h3>
 
-          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="text-sm text-slate-400">Total Deliveries</p>
-              <p className="mt-2 text-2xl font-bold text-white">
-                {deliveries.length}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-              <p className="text-sm text-emerald-300">Successful</p>
-              <p className="mt-2 text-2xl font-bold text-emerald-400">
-                {deliveries.filter((item) => item.status === "success").length}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-4">
-              <p className="text-sm text-rose-300">Failed</p>
-              <p className="mt-2 text-2xl font-bold text-rose-400">
-                {deliveries.filter((item) => item.status === "failed").length}
-              </p>
-            </div>
-          </div>
-
-          {/* FILTER */}
-
-          <div className="mb-5 max-w-sm">
-            <label
-              htmlFor="delivery-filter"
-              className="text-sm font-medium text-slate-300"
-            >
-              Filter by webhook
-            </label>
-
-            <select
-              id="delivery-filter"
-              className={inputClass}
-              value={selectedWebhook}
-              onChange={(event) => setSelectedWebhook(event.target.value)}
-            >
-              <option value="all">All webhooks</option>
-
-              {webhooks.map((webhook) => (
-                <option key={webhook.id} value={String(webhook.id)}>
-                  {webhook.url}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* DELIVERY TABLE */}
-
-          {deliveriesLoading ? (
-            <p className="text-sm text-slate-400">
-              Loading delivery history...
-            </p>
-          ) : filteredDeliveries.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-700 p-8 text-center">
-              <p className="font-medium text-slate-300">
-                No delivery records found.
-              </p>
-              <p className="mt-1 text-sm text-slate-500">
-                Test a registered webhook to generate a delivery record.
-              </p>
-            </div>
+          {webhooksLoading ? (
+            <LoadingMessage text="Loading webhooks..." />
+          ) : webhooks.length === 0 ? (
+            <EmptyState
+              title="No webhooks registered"
+              description="Your registered integrations will appear here."
+            />
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-800">
-              <table className="min-w-full divide-y divide-slate-800 text-sm">
-                <thead className="bg-slate-950">
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="min-w-full divide-y divide-slate-100 text-sm">
+                <thead className="bg-slate-50">
                   <tr>
-                    <th className="whitespace-nowrap px-4 py-3 text-left text-slate-400">
-                      Event
-                    </th>
-                    <th className="px-4 py-3 text-left text-slate-400">
+                    <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">
                       Webhook URL
                     </th>
-                    <th className="px-4 py-3 text-left text-slate-400">
+                    <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                      Events
+                    </th>
+                    <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">
                       Status
                     </th>
-                    <th className="px-4 py-3 text-left text-slate-400">HTTP</th>
-                    <th className="px-4 py-3 text-left text-slate-400">
-                      Attempts
-                    </th>
-                    <th className="whitespace-nowrap px-4 py-3 text-left text-slate-400">
-                      Created
-                    </th>
-                    <th className="whitespace-nowrap px-4 py-3 text-left text-slate-400">
-                      Delivered
+                    <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                      Actions
                     </th>
                   </tr>
                 </thead>
 
-                <tbody className="divide-y divide-slate-800">
-                  {filteredDeliveries.map((delivery) => (
+                <tbody className="divide-y divide-slate-100">
+                  {webhooks.map((webhook) => (
                     <tr
-                      key={delivery.id}
-                      className="transition hover:bg-slate-800/30"
+                      key={webhook.id}
+                      className="transition hover:bg-violet-50/30"
                     >
-                      <td className="whitespace-nowrap px-4 py-4 font-medium text-white">
-                        {delivery.event}
-                      </td>
-
-                      <td className="max-w-xs break-all px-4 py-4 text-slate-400">
-                        {delivery.endpoint_url}
+                      <td className="max-w-xs break-all px-4 py-4 font-medium text-slate-700">
+                        {webhook.url}
                       </td>
 
                       <td className="px-4 py-4">
-                        <StatusBadge status={delivery.status} />
+                        <div className="flex flex-wrap gap-1.5">
+                          {webhook.events?.map((eventName) => (
+                            <span
+                              key={eventName}
+                              className="rounded-md bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700"
+                            >
+                              {eventName}
+                            </span>
+                          ))}
+                        </div>
                       </td>
 
-                      <td className="px-4 py-4 text-slate-300">
-                        {delivery.response_status ?? "—"}
+                      <td className="px-4 py-4">
+                        <StatusBadge
+                          status={webhook.active ? "Active" : "Inactive"}
+                        />
                       </td>
 
-                      <td className="px-4 py-4 text-slate-300">
-                        {delivery.attempts}
-                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            className={buttonPrimary}
+                            disabled={saving || !webhook.active}
+                            onClick={() => testWebhook(webhook)}
+                          >
+                            Test
+                          </button>
 
-                      <td className="whitespace-nowrap px-4 py-4 text-slate-400">
-                        {formatDate(delivery.created_at)}
-                      </td>
+                          <button
+                            className={buttonSecondary}
+                            disabled={saving}
+                            onClick={() => toggleWebhookActive(webhook)}
+                          >
+                            {webhook.active ? "Deactivate" : "Activate"}
+                          </button>
 
-                      <td className="whitespace-nowrap px-4 py-4 text-slate-400">
-                        {formatDate(delivery.delivered_at)}
+                          <button
+                            className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 disabled:opacity-50"
+                            disabled={saving}
+                            onClick={() => deleteWebhook(webhook)}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1416,37 +1298,181 @@ export default function Settings() {
               </table>
             </div>
           )}
+        </div>
+      </section>
 
-          {/* DELIVERY ERROR DETAILS */}
+      {/* WEBHOOK DELIVERY HISTORY */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-7">
+        <SectionHeader
+          eyebrow="Integration monitoring"
+          title="Webhook Delivery History"
+          description="Monitor webhook attempts, responses, and delivery status."
+          action={
+            <button
+              className={buttonSecondary}
+              onClick={loadDeliveries}
+              disabled={deliveriesLoading}
+            >
+              {deliveriesLoading ? "Refreshing..." : "↻ Refresh History"}
+            </button>
+          }
+        />
 
-          {filteredDeliveries.some((item) => item.last_error) && (
-            <div className="mt-6">
-              <h3 className="mb-3 text-sm font-semibold text-rose-300">
-                Delivery Error Details
-              </h3>
+        {/* DELIVERY SUMMARY */}
+        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Total Deliveries
+            </p>
+            <p className="mt-2 text-2xl font-extrabold text-slate-900">
+              {deliveries.length}
+            </p>
+          </div>
 
-              <div className="space-y-3">
-                {filteredDeliveries
-                  .filter((item) => item.last_error)
-                  .map((delivery) => (
-                    <div
-                      key={delivery.id}
-                      className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-4"
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
+              Successful
+            </p>
+            <p className="mt-2 text-2xl font-extrabold text-emerald-700">
+              {deliveries.filter((item) => item.status === "success").length}
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-rose-100 bg-rose-50/60 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-rose-700">
+              Failed
+            </p>
+            <p className="mt-2 text-2xl font-extrabold text-rose-700">
+              {deliveries.filter((item) => item.status === "failed").length}
+            </p>
+          </div>
+        </div>
+
+        {/* FILTER */}
+        <div className="mb-5 max-w-sm">
+          <label
+            htmlFor="delivery-filter"
+            className="text-sm font-semibold text-slate-700"
+          >
+            Filter by webhook
+          </label>
+
+          <select
+            id="delivery-filter"
+            className={inputClass}
+            value={selectedWebhook}
+            onChange={(event) => setSelectedWebhook(event.target.value)}
+          >
+            <option value="all">All webhooks</option>
+
+            {webhooks.map((webhook) => (
+              <option key={webhook.id} value={String(webhook.id)}>
+                {webhook.url}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* DELIVERY TABLE */}
+        {deliveriesLoading ? (
+          <LoadingMessage text="Loading delivery history..." />
+        ) : filteredDeliveries.length === 0 ? (
+          <EmptyState
+            title="No delivery records found"
+            description="Test a registered webhook to generate a delivery record."
+          />
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="min-w-full divide-y divide-slate-100 text-sm">
+              <thead className="bg-slate-50">
+                <tr>
+                  {[
+                    "Event",
+                    "Webhook URL",
+                    "Status",
+                    "HTTP",
+                    "Attempts",
+                    "Created",
+                    "Delivered",
+                  ].map((heading) => (
+                    <th
+                      key={heading}
+                      className="whitespace-nowrap px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500"
                     >
-                      <p className="text-sm font-semibold text-white">
-                        Delivery #{delivery.id} — {delivery.event}
-                      </p>
-
-                      <p className="mt-2 break-words text-sm text-rose-300">
-                        {delivery.last_error}
-                      </p>
-                    </div>
+                      {heading}
+                    </th>
                   ))}
-              </div>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-slate-100">
+                {filteredDeliveries.map((delivery) => (
+                  <tr
+                    key={delivery.id}
+                    className="transition hover:bg-violet-50/30"
+                  >
+                    <td className="whitespace-nowrap px-4 py-4 font-semibold text-slate-700">
+                      {delivery.event}
+                    </td>
+
+                    <td className="max-w-xs break-all px-4 py-4 text-slate-500">
+                      {delivery.endpoint_url}
+                    </td>
+
+                    <td className="px-4 py-4">
+                      <StatusBadge status={delivery.status} />
+                    </td>
+
+                    <td className="px-4 py-4 text-slate-600">
+                      {delivery.response_status ?? "—"}
+                    </td>
+
+                    <td className="px-4 py-4 text-slate-600">
+                      {delivery.attempts}
+                    </td>
+
+                    <td className="whitespace-nowrap px-4 py-4 text-xs text-slate-500">
+                      {formatDate(delivery.created_at)}
+                    </td>
+
+                    <td className="whitespace-nowrap px-4 py-4 text-xs text-slate-500">
+                      {formatDate(delivery.delivered_at)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* DELIVERY ERROR DETAILS */}
+        {filteredDeliveries.some((item) => item.last_error) && (
+          <div className="mt-6">
+            <h3 className="mb-3 text-sm font-bold text-rose-700">
+              Delivery Error Details
+            </h3>
+
+            <div className="space-y-3">
+              {filteredDeliveries
+                .filter((item) => item.last_error)
+                .map((delivery) => (
+                  <div
+                    key={delivery.id}
+                    className="rounded-xl border border-rose-200 bg-rose-50/70 p-4"
+                  >
+                    <p className="text-sm font-semibold text-slate-800">
+                      Delivery #{delivery.id} — {delivery.event}
+                    </p>
+
+                    <p className="mt-2 break-words text-sm text-rose-700">
+                      {delivery.last_error}
+                    </p>
+                  </div>
+                ))}
             </div>
-          )}
-        </section>
-      </div>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

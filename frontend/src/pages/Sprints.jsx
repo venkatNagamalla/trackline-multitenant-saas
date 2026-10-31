@@ -1,6 +1,65 @@
+
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { apiRequest } from "../api";
+
+const priorityStyles = {
+  low: "border-slate-200 bg-slate-100 text-slate-600",
+  medium: "border-blue-200 bg-blue-50 text-blue-700",
+  high: "border-amber-200 bg-amber-50 text-amber-700",
+  urgent: "border-red-200 bg-red-50 text-red-700",
+};
+
+const stateStyles = {
+  planned: "bg-slate-100 text-slate-600",
+  active: "bg-violet-100 text-violet-700",
+  completed: "bg-emerald-100 text-emerald-700",
+  closed: "bg-slate-200 text-slate-600",
+};
+
+function LoadingIndicator({ message }) {
+  return (
+    <div className="flex min-h-[220px] w-full flex-col items-center justify-center text-center">
+      <div className="relative flex h-11 w-11 items-center justify-center">
+        <div className="absolute inset-0 animate-spin rounded-full border-[3px] border-violet-100 border-t-violet-700" />
+        <span className="text-sm font-bold text-violet-700">T</span>
+      </div>
+      <p className="mt-4 text-sm font-semibold text-slate-700">
+        {message}
+      </p>
+    </div>
+  );
+}
+
+function PriorityBadge({ priority }) {
+  const value = (priority || "medium").toLowerCase();
+
+  return (
+    <span
+      className={`inline-flex rounded-md border px-2 py-1 text-[10px] font-bold capitalize ${
+        priorityStyles[value] || priorityStyles.medium
+      }`}
+    >
+      {value}
+    </span>
+  );
+}
+
+function SprintIssue({ issue }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-slate-100 py-3 last:border-0">
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold text-slate-800">
+          {issue.title}
+        </p>
+        <p className="mt-1 text-[10px] text-slate-400">
+          Issue #{issue.id}
+        </p>
+      </div>
+      <PriorityBadge priority={issue.priority} />
+    </div>
+  );
+}
 
 export default function Sprints() {
   const { projectId } = useParams();
@@ -27,6 +86,7 @@ export default function Sprints() {
   useEffect(() => {
     async function loadSprints() {
       setLoading(true);
+      setError("");
 
       try {
         const data = await apiRequest("/projects/sprints/");
@@ -83,8 +143,8 @@ export default function Sprints() {
     loadIssues();
   }, [projectId]);
 
-  async function handleCreateSprint(e) {
-    e.preventDefault();
+  async function handleCreateSprint(event) {
+    event.preventDefault();
     setError("");
 
     if (end < start) {
@@ -159,7 +219,6 @@ export default function Sprints() {
         [sprintId]: report,
       }));
 
-      console.log("Sprint Report:", report);
       return report;
     } catch (err) {
       setError(err.message || "Failed to load sprint report.");
@@ -201,7 +260,6 @@ export default function Sprints() {
     setAddingIssueId(issueId);
 
     try {
-      // Assumes the Issue API accepts PATCH with a sprint ID.
       await apiRequest(`/projects/issues/${issueId}/`, {
         method: "PATCH",
         body: JSON.stringify({
@@ -222,245 +280,410 @@ export default function Sprints() {
   }
 
   return (
-    <div style={{ maxWidth: "900px", margin: "0 auto", padding: "24px" }}>
-      <h1>Sprints</h1>
-      <p>Project ID: {projectId}</p>
+    <main className="mx-auto w-full max-w-[1400px] space-y-6">
 
-      <form
-        onSubmit={handleCreateSprint}
-        style={{
-          display: "grid",
-          gap: "12px",
-          maxWidth: "400px",
-          marginBottom: "28px",
-        }}
-      >
-        <h2>Create Sprint</h2>
+      {/* Page header */}
+      <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div>
+            <span className="rounded-md bg-violet-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-violet-700">
+              Project management
+            </span>
 
-        <input
-          type="text"
-          placeholder="Sprint name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
+            <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+              Sprints
+            </h1>
 
-        <label>
-          Start date
-          <input
-            type="date"
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-            required
-          />
-        </label>
+            <p className="mt-2 text-sm text-slate-500">
+              Plan work, organize issues, and track sprint progress.
+            </p>
+          </div>
 
-        <label>
-          End date
-          <input
-            type="date"
-            value={end}
-            min={start || undefined}
-            onChange={(e) => setEnd(e.target.value)}
-            required
-          />
-        </label>
+          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <span className="h-2 w-2 rounded-full bg-violet-500" />
+            <span className="text-xs font-semibold text-slate-600">
+              Project #{projectId}
+            </span>
+          </div>
+        </div>
+      </header>
 
-        <button type="submit" disabled={creating}>
-          {creating ? "Creating..." : "Create Sprint"}
-        </button>
-      </form>
-
+      {/* Error message */}
       {error && (
-        <p role="alert" style={{ color: "crimson" }}>
-          {error}
-        </p>
-      )}
-
-      <h2>Sprint List</h2>
-
-      {loading ? (
-        <p>Loading sprints...</p>
-      ) : sprints.length === 0 ? (
-        <p>No sprints found for this project.</p>
-      ) : (
-        <div style={{ display: "grid", gap: "16px" }}>
-          {sprints.map((sprint) => {
-            const progress = getProgress(reports[sprint.id]);
-
-            const issuesForSprint = sprintIssues.filter(
-              (issue) => Number(issue.sprint) === Number(sprint.id)
-            );
-
-            return (
-              <div
-                key={sprint.id}
-                style={{
-                  border: "1px solid #ddd",
-                  borderRadius: "8px",
-                  padding: "16px",
-                }}
-              >
-                <h3>{sprint.name}</h3>
-
-                <p>
-                  Status: <strong>{sprint.state}</strong>
-                </p>
-                <p>Start: {sprint.start}</p>
-                <p>End: {sprint.end}</p>
-
-                {sprint.state === "planned" && (
-                  <button
-                    onClick={() => handleSprintAction(sprint.id, "start")}
-                    disabled={actingSprintId !== null}
-                  >
-                    {actingSprintId === sprint.id
-                      ? "Starting..."
-                      : "Start Sprint"}
-                  </button>
-                )}
-
-                {sprint.state === "active" && (
-                  <button
-                    onClick={() => handleSprintAction(sprint.id, "complete")}
-                    disabled={actingSprintId !== null}
-                  >
-                    {actingSprintId === sprint.id
-                      ? "Completing..."
-                      : "Complete Sprint"}
-                  </button>
-                )}
-
-                <div style={{ marginTop: "16px" }}>
-                  <button
-                    onClick={() => loadSprintReport(sprint.id)}
-                    disabled={reportLoadingId === sprint.id}
-                  >
-                    {reportLoadingId === sprint.id
-                      ? "Loading report..."
-                      : "Load Sprint Report"}
-                  </button>
-
-                  {progress && (
-                    <div style={{ marginTop: "12px" }}>
-                      <p>
-                        Progress: {progress.completed} / {progress.total}{" "}
-                        issues completed ({progress.percentage}%)
-                      </p>
-
-                      <div
-                        style={{
-                          height: "10px",
-                          background: "#e5e7eb",
-                          borderRadius: "999px",
-                          overflow: "hidden",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${progress.percentage}%`,
-                            height: "100%",
-                            background: "#16a34a",
-                            transition: "width 0.3s ease",
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <hr style={{ margin: "20px 0" }} />
-
-                <h4>Sprint Issues</h4>
-
-                {issuesLoading ? (
-                  <p>Loading issues...</p>
-                ) : issuesForSprint.length === 0 ? (
-                  <p>No issues assigned to this sprint.</p>
-                ) : (
-                  issuesForSprint.map((issue) => (
-                    <div
-                      key={issue.id}
-                      style={{
-                        padding: "10px 0",
-                        borderBottom: "1px solid #eee",
-                      }}
-                    >
-                      <strong>{issue.title}</strong>
-                      <p>
-                        Priority: {issue.priority}
-                      </p>
-                      <p>Issue ID: {issue.id}</p>
-                    </div>
-                  ))
-                )}
-              </div>
-            );
-          })}
+        <div
+          role="alert"
+          className="flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => setError("")}
+            aria-label="Dismiss error"
+            className="font-bold text-red-500 hover:text-red-700"
+          >
+            ✕
+          </button>
         </div>
       )}
 
-      <section style={{ marginTop: "32px" }}>
-        <h2>Backlog</h2>
+      {/* Create sprint */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="mb-5">
+          <h2 className="text-lg font-bold text-slate-900">
+            Create a sprint
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Define a sprint and set its schedule.
+          </p>
+        </div>
 
-        {issuesLoading ? (
-          <p>Loading backlog...</p>
-        ) : backlogIssues.length === 0 ? (
-          <p>No backlog issues found for this project.</p>
-        ) : (
-          backlogIssues.map((issue) => (
-            <div
-              key={issue.id}
-              style={{
-                border: "1px solid #ddd",
-                borderRadius: "8px",
-                padding: "12px",
-                marginBottom: "10px",
-              }}
-            >
-              <strong>{issue.title}</strong>
-              <p>Priority: {issue.priority}</p>
-              <p>Issue ID: {issue.id}</p>
+        <form onSubmit={handleCreateSprint}>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <label className="block">
+              <span className="mb-2 block text-xs font-semibold text-slate-600">
+                Sprint name
+              </span>
+              <input
+                type="text"
+                placeholder="e.g. Sprint 01"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:bg-white focus:ring-2 focus:ring-violet-100"
+              />
+            </label>
 
-              <label>
-                Select sprint
-                <select
-                  value={selectedSprintByIssue[issue.id] ?? ""}
-                  onChange={(e) =>
-                    setSelectedSprintByIssue((previous) => ({
-                      ...previous,
-                      [issue.id]: e.target.value,
-                    }))
-                  }
-                >
-                  <option value="">Choose a sprint</option>
-                  {sprints
-                    .filter(
-                      (sprint) =>
-                        sprint.state !== "closed" &&
-                        Number(sprint.project) === Number(projectId)
-                    )
-                    .map((sprint) => (
-                      <option key={sprint.id} value={sprint.id}>
-                        {sprint.name} ({sprint.state})
-                      </option>
-                    ))}
-                </select>
-              </label>
+            <label className="block">
+              <span className="mb-2 block text-xs font-semibold text-slate-600">
+                Start date
+              </span>
+              <input
+                type="date"
+                value={start}
+                onChange={(event) => setStart(event.target.value)}
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 outline-none transition focus:border-violet-400 focus:bg-white focus:ring-2 focus:ring-violet-100"
+              />
+            </label>
 
+            <label className="block">
+              <span className="mb-2 block text-xs font-semibold text-slate-600">
+                End date
+              </span>
+              <input
+                type="date"
+                value={end}
+                min={start || undefined}
+                onChange={(event) => setEnd(event.target.value)}
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 outline-none transition focus:border-violet-400 focus:bg-white focus:ring-2 focus:ring-violet-100"
+              />
+            </label>
+
+            <div className="flex items-end">
               <button
-                onClick={() => handleAddToSprint(issue.id)}
-                disabled={addingIssueId === issue.id}
-                style={{ marginLeft: "8px" }}
+                type="submit"
+                disabled={creating}
+                className="w-full rounded-xl bg-[#34205f] px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#261749] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {addingIssueId === issue.id
-                  ? "Adding..."
-                  : "Add to Sprint"}
+                {creating ? "Creating..." : "+ Create sprint"}
               </button>
             </div>
-          ))
+          </div>
+        </form>
+      </section>
+
+      {/* Sprint list */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-extrabold text-slate-900">
+              Your sprints
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              View sprint details and monitor progress.
+            </p>
+          </div>
+
+          <span className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600">
+            {sprints.length} total
+          </span>
+        </div>
+
+        {loading ? (
+          <LoadingIndicator message="Loading sprints..." />
+        ) : sprints.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-14 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-violet-50 text-xl text-violet-600">
+              ◷
+            </div>
+            <h3 className="mt-4 text-base font-bold text-slate-800">
+              No sprints yet
+            </h3>
+            <p className="mt-2 text-sm text-slate-500">
+              Create your first sprint using the form above.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-5 xl:grid-cols-2">
+            {sprints.map((sprint) => {
+              const progress = getProgress(reports[sprint.id]);
+
+              const issuesForSprint = sprintIssues.filter(
+                (issue) => Number(issue.sprint) === Number(sprint.id)
+              );
+
+              const state = (sprint.state || "planned").toLowerCase();
+
+              return (
+                <article
+                  key={sprint.id}
+                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
+                >
+                  <div className="p-5 sm:p-6">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Sprint #{sprint.id}
+                        </p>
+                        <h3 className="mt-1 truncate text-lg font-extrabold text-slate-900">
+                          {sprint.name}
+                        </h3>
+                      </div>
+
+                      <span
+                        className={`rounded-full px-3 py-1.5 text-[10px] font-bold capitalize ${
+                          stateStyles[state] || stateStyles.planned
+                        }`}
+                      >
+                        {sprint.state}
+                      </span>
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-slate-50 p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                          Start date
+                        </p>
+                        <p className="mt-1 text-sm font-bold text-slate-700">
+                          {sprint.start}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl bg-slate-50 p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                          End date
+                        </p>
+                        <p className="mt-1 text-sm font-bold text-slate-700">
+                          {sprint.end}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 flex flex-wrap gap-2">
+                      {state === "planned" && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleSprintAction(sprint.id, "start")
+                          }
+                          disabled={actingSprintId !== null}
+                          className="rounded-lg bg-[#34205f] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-[#261749] disabled:opacity-60"
+                        >
+                          {actingSprintId === sprint.id
+                            ? "Starting..."
+                            : "Start sprint"}
+                        </button>
+                      )}
+
+                      {state === "active" && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleSprintAction(sprint.id, "complete")
+                          }
+                          disabled={actingSprintId !== null}
+                          className="rounded-lg bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-60"
+                        >
+                          {actingSprintId === sprint.id
+                            ? "Completing..."
+                            : "Complete sprint"}
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => loadSprintReport(sprint.id)}
+                        disabled={reportLoadingId === sprint.id}
+                        className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 disabled:opacity-60"
+                      >
+                        {reportLoadingId === sprint.id
+                          ? "Loading report..."
+                          : "View report"}
+                      </button>
+                    </div>
+
+                    {/* Progress */}
+                    {progress && (
+                      <div className="mt-6 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                        <div className="mb-3 flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold text-slate-700">
+                            Sprint progress
+                          </span>
+                          <span className="text-sm font-extrabold text-violet-700">
+                            {progress.percentage}%
+                          </span>
+                        </div>
+
+                        <div
+                          className="h-2.5 overflow-hidden rounded-full bg-slate-200"
+                          role="progressbar"
+                          aria-valuenow={progress.percentage}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                        >
+                          <div
+                            className="h-full rounded-full bg-violet-700 transition-all duration-500"
+                            style={{
+                              width: `${progress.percentage}%`,
+                            }}
+                          />
+                        </div>
+
+                        <p className="mt-2 text-[11px] text-slate-500">
+                          {progress.completed} of {progress.total} issues completed
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Sprint issues */}
+                    <div className="mt-6 border-t border-slate-100 pt-5">
+                      <div className="mb-2 flex items-center justify-between">
+                        <h4 className="text-sm font-bold text-slate-800">
+                          Sprint issues
+                        </h4>
+                        <span className="rounded-md bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-500">
+                          {issuesForSprint.length}
+                        </span>
+                      </div>
+
+                      {issuesLoading ? (
+                        <p className="py-4 text-center text-xs text-slate-400">
+                          Loading issues...
+                        </p>
+                      ) : issuesForSprint.length === 0 ? (
+                        <p className="rounded-lg bg-slate-50 px-3 py-5 text-center text-xs text-slate-400">
+                          No issues assigned to this sprint.
+                        </p>
+                      ) : (
+                        <div>
+                          {issuesForSprint.map((issue) => (
+                            <SprintIssue key={issue.id} issue={issue} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         )}
       </section>
-    </div>
+
+      {/* Backlog */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-extrabold text-slate-900">
+              Backlog
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Assign unplanned issues to an available sprint.
+            </p>
+          </div>
+
+          <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600">
+            {backlogIssues.length} issues
+          </span>
+        </div>
+
+        {issuesLoading ? (
+          <LoadingIndicator message="Loading backlog..." />
+        ) : backlogIssues.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
+            <p className="text-sm font-semibold text-slate-600">
+              Your backlog is empty
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              Unassigned issues will appear here.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {backlogIssues.map((issue) => (
+              <div
+                key={issue.id}
+                className="flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-sm font-bold text-slate-800">
+                      {issue.title}
+                    </h3>
+                    <PriorityBadge priority={issue.priority} />
+                  </div>
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    Issue #{issue.id}
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-2 sm:w-[320px] sm:flex-row">
+                  <label className="min-w-0 flex-1">
+                    <span className="sr-only">
+                      Select sprint for issue {issue.id}
+                    </span>
+                    <select
+                      value={selectedSprintByIssue[issue.id] ?? ""}
+                      onChange={(event) =>
+                        setSelectedSprintByIssue((previous) => ({
+                          ...previous,
+                          [issue.id]: event.target.value,
+                        }))
+                      }
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                    >
+                      <option value="">Choose a sprint</option>
+                      {sprints
+                        .filter(
+                          (sprint) =>
+                            sprint.state !== "closed" &&
+                            Number(sprint.project) === Number(projectId)
+                        )
+                        .map((sprint) => (
+                          <option key={sprint.id} value={sprint.id}>
+                            {sprint.name} ({sprint.state})
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => handleAddToSprint(issue.id)}
+                    disabled={addingIssueId === issue.id}
+                    className="shrink-0 rounded-lg bg-[#34205f] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-[#261749] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {addingIssueId === issue.id
+                      ? "Adding..."
+                      : "Add to sprint"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </main>
   );
 }
