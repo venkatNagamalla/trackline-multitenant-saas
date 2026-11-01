@@ -1,0 +1,46 @@
+
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 64 64"
+  fill="none"
+>
+  <rect
+    width="64"
+    height="64"
+    rx="16"
+    fill="#17152E"
+  />
+
+  <path
+    d="M17 19H39C43.4 19 47 22.6 47 27V29"
+    stroke="#A78BFA"
+    stroke-width="5"
+    stroke-linecap="round"
+  />
+
+  <path
+    d="M47 29L41 23"
+    stroke="#A78BFA"
+    stroke-width="5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <path
+    d="M47 29L53 23"
+    stroke="#A78BFA"
+    stroke-width="5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <path
+    d="M47 29V37C47 41.4 43.4 45 39 45H17"
+    stroke="#8B5CF6"
+    stroke-width="5"
+    stroke-linecap="round"
+  />
+
+  <circle cx="17" cy="19" r="5" fill="#C4B5FD" />
+  <circle cx="17" cy="45" r="5" fill="#8B5CF6" />
+</svg>

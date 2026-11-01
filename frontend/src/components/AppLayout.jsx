@@ -120,9 +120,13 @@ export default function AppLayout() {
             onClick={closeSidebar}
             className="flex items-center gap-3"
           >
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600 text-xl font-bold text-white">
-              T
-            </span>
+            <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl">
+  <img
+    src="/trackline-logo.svg"
+    alt="Trackline Logo"
+    className="h-full w-full object-contain"
+  />
+</span>
 
             <span>
               <span className="block text-lg font-bold tracking-tight text-white">
