@@ -1,6 +1,6 @@
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api";
+  import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 
 let refreshPromise = null;
 
@@ -96,6 +96,7 @@ export async function apiFetch(path, options = {}, config = {}) {
   };
 
   const { access } = getStoredTokens();
+
   let response = await makeRequest(
     isLoginRequest || isSignupRequest ? null : access
   );
@@ -125,13 +126,14 @@ export async function apiRequest(path, options = {}, config = {}) {
 
   if (!response.ok) {
     const message =
-  response.status === 402
-    ? data?.detail || "Your plan limit has been reached. Please upgrade to Pro."
-    : data?.detail ||
-      data?.message ||
-      data?.non_field_errors?.[0] ||
-      (typeof data === "string" ? data : null) ||
-      `Request failed with status ${response.status}`;
+      response.status === 402
+        ? data?.detail ||
+          "Your plan limit has been reached. Please upgrade to Pro."
+        : data?.detail ||
+          data?.message ||
+          data?.non_field_errors?.[0] ||
+          (typeof data === "string" ? data : null) ||
+          `Request failed with status ${response.status}`;
 
     const error = new Error(message);
     error.status = response.status;
