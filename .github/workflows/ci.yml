@@ -1,0 +1,93 @@
+
+name: Trackline CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: trackline
+          POSTGRES_USER: trackline
+          POSTGRES_PASSWORD: trackline
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U trackline -d trackline"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DJANGO_SECRET_KEY: ci-test-secret-key
+      DEBUG: "False"
+      POSTGRES_DB: trackline
+      POSTGRES_USER: trackline
+      POSTGRES_PASSWORD: trackline
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      CELERY_EAGER: "1"
+      REDIS_URL: redis://localhost:6379/0
+      ALLOWED_HOSTS: localhost,127.0.0.1
+      CORS_ALLOWED_ORIGINS: http://localhost,http://localhost:5173
+      STRIPE_SECRET_KEY: sk_test_ci_placeholder
+      STRIPE_PRICE_ID: price_ci_placeholder
+      STRIPE_WEBHOOK_SECRET: whsec_ci_placeholder
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Run backend tests
+        working-directory: backend
+        run: python -m pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies and build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+  images:
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build backend Docker image
+        run: docker build -t trackline-backend ./backend
+
+      - name: Build frontend Docker image
+        run: docker build -t trackline-frontend ./frontend
